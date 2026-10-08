@@ -83,11 +83,24 @@ function markdownToHtml(markdown) {
     return out.join("");
 }
 
-function renderFiles() {
-    fileList.innerHTML = selectedFiles.map(file =>
-        `<div class="file-item">📄 ${escapeHtml(file.name)} <span style="margin-left:auto;opacity:.7">${Math.ceil(file.size / 1024)} Ko</span></div>`
-    ).join("");
-}
+filesInput.addEventListener("change", () => {
+    const newFiles = Array.from(filesInput.files || []);
+
+    newFiles.forEach(file => {
+        const alreadyAdded = selectedFiles.some(
+            existing =>
+                existing.name === file.name &&
+                existing.size === file.size &&
+                existing.lastModified === file.lastModified
+        );
+
+        if (!alreadyAdded) {
+            selectedFiles.push(file);
+        }
+    });
+
+    renderFiles();
+});
 
 filesInput.addEventListener("change", () => {
     selectedFiles = Array.from(filesInput.files || []);
@@ -103,7 +116,21 @@ filesInput.addEventListener("change", () => {
     dropZone.classList.remove("dragover");
 }));
 dropZone.addEventListener("drop", event => {
-    selectedFiles = Array.from(event.dataTransfer.files || []);
+    const newFiles = Array.from(event.dataTransfer.files || []);
+
+    newFiles.forEach(file => {
+        const alreadyAdded = selectedFiles.some(
+            existing =>
+                existing.name === file.name &&
+                existing.size === file.size &&
+                existing.lastModified === file.lastModified
+        );
+
+        if (!alreadyAdded) {
+            selectedFiles.push(file);
+        }
+    });
+
     renderFiles();
 });
 
