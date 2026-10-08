@@ -1,204 +1,286 @@
 const form = document.getElementById("uploadForm");
-const input = document.getElementById("files");
-const selectedFiles = document.getElementById("selectedFiles");
-const statusBox = document.getElementById("statusBox");
+const filesInput = document.getElementById("files");
+const fileList = document.getElementById("fileList");
+const generateButton = document.getElementById("generateButton");
+const statusBox = document.getElementById("status");
 const resultCard = document.getElementById("resultCard");
+const resultContent = document.getElementById("resultContent");
+const copyButton = document.getElementById("copyButton");
+const dropZone = document.getElementById("dropZone");
+const quizButton = document.getElementById("quizButton");
 const quizCard = document.getElementById("quizCard");
-const ficheBox = document.getElementById("fiche");
-const quizBox = document.getElementById("quiz");
+const quizResultCard = document.getElementById("quizResultCard");
+const quizCounter = document.getElementById("quizCounter");
+const quizProgress = document.getElementById("quizProgress");
+const quizQuestion = document.getElementById("quizQuestion");
+const quizAnswers = document.getElementById("quizAnswers");
+const quizFeedback = document.getElementById("quizFeedback");
 const quizScore = document.getElementById("quizScore");
-const newQuizBtn = document.getElementById("newQuizBtn");
+const nextQuizButton = document.getElementById("nextQuizButton");
+const quizFinalScore = document.getElementById("quizFinalScore");
+const quizFinalMessage = document.getElementById("quizFinalMessage");
+const retryQuizButton = document.getElementById("retryQuizButton");
+const backToRevisionButton = document.getElementById("backToRevisionButton");
 
-let currentQuiz = [];
-let lastCourseFiles = [];
-let userAnswers = [];
+let selectedFiles = [];
+let sessionId = "";
+let quizQuestions = [];
+let quizIndex = 0;
+let quizScoreValue = 0;
+let answered = false;
 
-input.addEventListener("change", () => {
-    const files = Array.from(input.files || []);
-    lastCourseFiles = files;
-    if (!files.length) {
-        selectedFiles.textContent = "Aucun fichier sélectionné.";
-        return;
-    }
-    selectedFiles.textContent = `${files.length} fichier(s) : ${files.map(f => f.name).join(", ")}`;
-});
+function setStatus(message, error = false) {
+    statusBox.textContent = message;
+    statusBox.classList.toggle("error", error);
+}
 
 function escapeHtml(value) {
-    return String(value ?? "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
+    return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
 }
 
 function inlineMarkdown(text) {
-    let s = escapeHtml(text);
-    s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
-    s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-    s = s.replace(/\*([^*]+)\*/g, "<em>$1</em>");
-    return s;
+    return escapeHtml(text)
+        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+        .replace(/\*(.+?)\*/g, "<em>$1</em>");
 }
 
 function markdownToHtml(markdown) {
-    const lines = String(markdown ?? "").split(/\r?\n/);
-    let html = "";
-    let inUl = false;
-    let inOl = false;
-    let inQuote = false;
+    markdown = typeof markdown === "string" ? markdown : "";
+    const lines = markdown.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+    const out = [];
+    let listOpen = false;
+    let paragraph = [];
 
-    const closeLists = () => {
-        if (inUl) { html += "</ul>"; inUl = false; }
-        if (inOl) { html += "</ol>"; inOl = false; }
-    };
-    const closeQuote = () => {
-        if (inQuote) { html += "</blockquote>"; inQuote = false; }
-    };
+    function closeList() {
+        if (listOpen) { out.push("</ul>"); listOpen = false; }
+    }
+    function flushParagraph() {
+        if (paragraph.length) { out.push(`<p>${inlineMarkdown(paragraph.join(" "))}</p>`); paragraph = []; }
+    }
 
-    for (const rawLine of lines) {
-        const line = rawLine.trimEnd();
-        if (!line.trim()) {
-            closeLists();
-            closeQuote();
+    for (const raw of lines) {
+        const line = raw.trim();
+        if (!line) { flushParagraph(); closeList(); continue; }
+        if (line.startsWith("# ")) { flushParagraph(); closeList(); out.push(`<h1>${inlineMarkdown(line.slice(2))}</h1>`); continue; }
+        if (line.startsWith("## ")) { flushParagraph(); closeList(); out.push(`<h2>${inlineMarkdown(line.slice(3))}</h2>`); continue; }
+        if (line.startsWith("### ")) { flushParagraph(); closeList(); out.push(`<h3>${inlineMarkdown(line.slice(4))}</h3>`); continue; }
+        const bullet = line.match(/^[-*]\s+(.+)$/);
+        if (bullet) {
+            flushParagraph();
+            if (!listOpen) { out.push("<ul>"); listOpen = true; }
+            out.push(`<li>${inlineMarkdown(bullet[1])}</li>`);
             continue;
         }
-
-        if (line.startsWith(">")) {
-            closeLists();
-            if (!inQuote) { html += "<blockquote>"; inQuote = true; }
-            html += `${inlineMarkdown(line.replace(/^>\s?/, ""))}<br>`;
-            continue;
-        }
-
-        closeQuote();
-
-        if (line.startsWith("### ")) {
-            closeLists();
-            html += `<h3>${inlineMarkdown(line.slice(4))}</h3>`;
-        } else if (line.startsWith("## ")) {
-            closeLists();
-            html += `<h2>${inlineMarkdown(line.slice(3))}</h2>`;
-        } else if (line.startsWith("# ")) {
-            closeLists();
-            html += `<h1>${inlineMarkdown(line.slice(2))}</h1>`;
-        } else if (/^[-*]\s+/.test(line)) {
-            if (!inUl) { closeLists(); html += "<ul>"; inUl = true; }
-            html += `<li>${inlineMarkdown(line.replace(/^[-*]\s+/, ""))}</li>`;
-        } else if (/^\d+\.\s+/.test(line)) {
-            if (!inOl) { closeLists(); html += "<ol>"; inOl = true; }
-            html += `<li>${inlineMarkdown(line.replace(/^\d+\.\s+/, ""))}</li>`;
-        } else {
-            closeLists();
-            html += `<p>${inlineMarkdown(line)}</p>`;
-        }
+        paragraph.push(line);
     }
-
-    closeLists();
-    closeQuote();
-    return html;
+    flushParagraph();
+    closeList();
+    return out.join("");
 }
 
-function setStatus(message, isError = false) {
-    statusBox.classList.remove("hidden");
-    statusBox.textContent = message;
-    statusBox.style.background = isError ? "#fef2f2" : "#f3f4f6";
-    statusBox.style.color = isError ? "#991b1b" : "#374151";
+function renderFiles() {
+    fileList.innerHTML = selectedFiles.map(file =>
+        `<div class="file-item">📄 ${escapeHtml(file.name)} <span style="margin-left:auto;opacity:.7">${Math.ceil(file.size / 1024)} Ko</span></div>`
+    ).join("");
 }
 
-function renderQuiz(quiz) {
-    currentQuiz = Array.isArray(quiz) ? quiz : [];
-    userAnswers = Array(currentQuiz.length).fill(null);
-    quizBox.innerHTML = "";
-    quizScore.textContent = "";
-    newQuizBtn.classList.add("hidden");
+filesInput.addEventListener("change", () => {
+    selectedFiles = Array.from(filesInput.files || []);
+    renderFiles();
+});
 
-    if (!currentQuiz.length) {
-        quizBox.innerHTML = "<p>Le quiz n'a pas pu être généré.</p>";
-        return;
-    }
-
-    currentQuiz.forEach((item, index) => {
-        const wrapper = document.createElement("div");
-        wrapper.className = "quiz-question";
-        wrapper.innerHTML = `<h3>${index + 1}. ${escapeHtml(item.question)}</h3>`;
-
-        item.options.forEach((option, optionIndex) => {
-            const button = document.createElement("button");
-            button.type = "button";
-            button.className = "option";
-            button.textContent = option;
-            button.addEventListener("click", () => answerQuestion(wrapper, index, optionIndex));
-            wrapper.appendChild(button);
-        });
-        quizBox.appendChild(wrapper);
-    });
-}
-
-function answerQuestion(wrapper, questionIndex, chosenIndex) {
-    const item = currentQuiz[questionIndex];
-    if (!item) return;
-    const options = Array.from(wrapper.querySelectorAll(".option"));
-    if (options.some(btn => btn.disabled)) return;
-
-    options.forEach(btn => btn.disabled = true);
-    options[item.answer]?.classList.add("correct");
-    if (chosenIndex !== item.answer) options[chosenIndex]?.classList.add("wrong");
-    userAnswers[questionIndex] = chosenIndex;
-
-    const explanation = document.createElement("div");
-    explanation.className = "explanation";
-    explanation.innerHTML = `<strong>${chosenIndex === item.answer ? "✅ Bonne réponse" : "❌ Mauvaise réponse"}</strong><br>${escapeHtml(item.explanation)}`;
-    wrapper.appendChild(explanation);
-
-    const done = userAnswers.filter(answer => answer !== null).length;
-    if (done >= currentQuiz.length) {
-        const finalScore = currentQuiz.reduce((total, question, index) => {
-            return total + (userAnswers[index] === question.answer ? 1 : 0);
-        }, 0);
-        quizScore.textContent = `Score : ${finalScore} / ${currentQuiz.length}`;
-        newQuizBtn.classList.remove("hidden");
-    }
-}
-
-async function generateAgain() {
-    if (!lastCourseFiles.length) return;
-    form.dispatchEvent(new Event("submit", {cancelable: true}));
-}
-
-form.addEventListener("submit", async (event) => {
+["dragenter", "dragover"].forEach(type => dropZone.addEventListener(type, event => {
     event.preventDefault();
-    const files = Array.from(input.files || []);
-    if (!files.length) {
-        setStatus("Choisis au moins un fichier.", true);
+    dropZone.classList.add("dragover");
+}));
+["dragleave", "drop"].forEach(type => dropZone.addEventListener(type, event => {
+    event.preventDefault();
+    dropZone.classList.remove("dragover");
+}));
+dropZone.addEventListener("drop", event => {
+    selectedFiles = Array.from(event.dataTransfer.files || []);
+    renderFiles();
+});
+
+async function waitForGeneration(jobId) {
+    for (;;) {
+        const response = await fetch(`/api/generate-status/${encodeURIComponent(jobId)}`);
+        const state = await response.json();
+
+        if (!response.ok) {
+            throw new Error(state.error || "Impossible de suivre la génération.");
+        }
+
+        setStatus(state.message || "Traitement en cours…");
+
+        if (state.status === "done") {
+            return state.result;
+        }
+
+        if (state.status === "error") {
+            throw new Error(state.message || "Erreur pendant la génération.");
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 900));
+    }
+}
+
+form.addEventListener("submit", async event => {
+    event.preventDefault();
+
+    if (!selectedFiles.length) {
+        setStatus("Sélectionne au moins un fichier.", true);
         return;
     }
 
-    const formData = new FormData();
-    files.forEach(file => formData.append("files", file));
+    generateButton.disabled = true;
+    setStatus("Envoi des fichiers…");
 
-    resultCard.classList.add("hidden");
-    quizCard.classList.add("hidden");
-    setStatus("Analyse des fichiers et génération de la fiche + du quiz…");
+    const data = new FormData();
+    selectedFiles.forEach(file => data.append("files", file));
 
     try {
-        const response = await fetch("/api/generate-from-files", {
+        const response = await fetch("/api/generate", {
             method: "POST",
-            body: formData
+            body: data
         });
-        const data = await response.json();
-        if (!response.ok || !data.ok) {
-            throw new Error(data.error || "Une erreur est survenue.");
+
+        const started = await response.json();
+
+        if (!response.ok) {
+            throw new Error(started.error || "Erreur inconnue.");
         }
 
-        ficheBox.innerHTML = markdownToHtml(data.fiche || "");
-        renderQuiz(data.quiz || []);
+        setStatus("Lecture des fichiers…");
+
+        const result = await waitForGeneration(started.job_id);
+
+        if (!result || typeof result !== "object") {
+            throw new Error("Le serveur n'a renvoyé aucun résultat.");
+        }
+
+        const content = typeof result.content === "string"
+            ? result.content
+            : (typeof result.revision === "string" ? result.revision : "");
+
+        if (!content.trim()) {
+            throw new Error("La fiche n'a pas été reçue par le navigateur.");
+        }
+
+        sessionId = typeof result.session_id === "string" ? result.session_id : "";
+        resultContent.innerHTML = markdownToHtml(content);
         resultCard.classList.remove("hidden");
-        quizCard.classList.remove("hidden");
-        setStatus(`✅ ${data.files_count || files.length} fichier(s) traité(s).`);
-        window.scrollTo({ top: resultCard.offsetTop - 20, behavior: "smooth" });
+        quizCard.classList.add("hidden");
+        quizResultCard.classList.add("hidden");
+        setStatus(`Fiche créée à partir de ${result.sources.length} fichier(s).`);
+        resultCard.scrollIntoView({ behavior: "smooth", block: "start" });
+
     } catch (error) {
-        setStatus(`❌ ${error.message}`, true);
+        setStatus(error.message, true);
+    } finally {
+        generateButton.disabled = false;
     }
 });
 
-newQuizBtn.addEventListener("click", generateAgain);
+copyButton.addEventListener("click", async () => {
+    const text = resultContent.innerText;
+    await navigator.clipboard.writeText(text);
+    copyButton.textContent = "Copié ✓";
+    setTimeout(() => { copyButton.textContent = "Copier"; }, 1200);
+});
+
+async function loadQuiz() {
+    if (!sessionId) return;
+    quizButton.disabled = true;
+    quizButton.textContent = "Génération…";
+    try {
+        const response = await fetch("/api/quiz", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ session_id: sessionId }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Le quiz n'a pas pu être créé.");
+        quizQuestions = result.questions || [];
+        quizIndex = 0;
+        quizScoreValue = 0;
+        quizResultCard.classList.add("hidden");
+        quizCard.classList.remove("hidden");
+        renderQuizQuestion();
+        quizCard.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (error) {
+        alert(error.message);
+    } finally {
+        quizButton.disabled = false;
+        quizButton.textContent = "🧠 Lancer le quiz";
+    }
+}
+
+function renderQuizQuestion() {
+    const item = quizQuestions[quizIndex];
+    if (!item) return finishQuiz();
+    answered = false;
+    quizCounter.textContent = `Question ${quizIndex + 1} / ${quizQuestions.length}`;
+    quizProgress.style.width = `${(quizIndex / quizQuestions.length) * 100}%`;
+    quizScore.textContent = `Score : ${quizScoreValue}`;
+    quizQuestion.textContent = item.question;
+    quizAnswers.innerHTML = "";
+    quizFeedback.classList.add("hidden");
+    quizFeedback.textContent = "";
+    nextQuizButton.disabled = true;
+    item.answers.forEach((answer, index) => {
+        const button = document.createElement("button");
+        button.className = "quiz-answer";
+        button.textContent = answer;
+        button.addEventListener("click", () => answerQuiz(index));
+        quizAnswers.appendChild(button);
+    });
+}
+
+function answerQuiz(index) {
+    if (answered) return;
+    answered = true;
+    const item = quizQuestions[quizIndex];
+    const buttons = [...quizAnswers.querySelectorAll("button")];
+    buttons.forEach(button => { button.disabled = true; });
+    if (index === item.correct) {
+        quizScoreValue += 1;
+        buttons[index].classList.add("correct");
+        quizFeedback.textContent = `✅ Bonne réponse ! ${item.explanation}`;
+    } else {
+        buttons[index].classList.add("wrong");
+        buttons[item.correct].classList.add("correct");
+        quizFeedback.textContent = `❌ Mauvaise réponse. ${item.explanation}`;
+    }
+    quizFeedback.classList.remove("hidden");
+    quizScore.textContent = `Score : ${quizScoreValue}`;
+    quizProgress.style.width = `${((quizIndex + 1) / quizQuestions.length) * 100}%`;
+    nextQuizButton.disabled = false;
+}
+
+function nextQuizQuestion() {
+    if (!answered) return;
+    quizIndex += 1;
+    if (quizIndex >= quizQuestions.length) finishQuiz();
+    else renderQuizQuestion();
+}
+
+function finishQuiz() {
+    quizCard.classList.add("hidden");
+    quizResultCard.classList.remove("hidden");
+    quizFinalScore.textContent = `${quizScoreValue} / ${quizQuestions.length}`;
+    const ratio = quizScoreValue / quizQuestions.length;
+    quizFinalMessage.textContent = ratio === 1 ? "Excellent, sans-faute !" : ratio >= .8 ? "Très bon résultat !" : ratio >= .6 ? "Bien joué, continue tes révisions." : "Refais un quiz pour renforcer tes connaissances.";
+    quizResultCard.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+quizButton.addEventListener("click", loadQuiz);
+nextQuizButton.addEventListener("click", nextQuizQuestion);
+retryQuizButton.addEventListener("click", loadQuiz);
+backToRevisionButton.addEventListener("click", () => resultCard.scrollIntoView({ behavior: "smooth" }));
+

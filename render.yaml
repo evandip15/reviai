@@ -2,12 +2,31 @@ services:
   - type: web
     name: reviai
     env: docker
+    plan: free
+    healthCheckPath: /api/health
     autoDeploy: true
-    healthCheckPath: /health
     envVars:
-      - key: GEMINI_API_KEY
-        sync: false
+      - key: AI_PROVIDER
+        value: gemini
       - key: GEMINI_MODEL
         value: gemini-3.8-flash
+      - key: MAX_UPLOAD_MB
+        value: "20"
+      - key: FREE_GENERATIONS_PER_DAY
+        value: "3"
+      - key: FREE_QUIZZES_PER_DAY
+        value: "3"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
       - key: ADS_ENABLED
-        value: "true"
+        value: "false"
+      - key: ADSENSE_CLIENT_ID
+        sync: false
+      - key: ADSENSE_SLOT_ID
+        sync: false
+      - key: ADSENSE_PUBLISHER_ID
+        sync: false
+      - key: PUBLIC_BASE_URL
+        sync: false
