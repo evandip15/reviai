@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+ <!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-263S8P8W2V"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-263S8P8W2V');
+</script>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RéviAI — Fiches et quiz de révision</title>
+    <meta name="description" content="RéviAI transforme tes cours en fiches de révision et quiz en français.">
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3292344498702156" crossorigin="anonymous"></script>
+</head>
+<body>
+    <header class="header">
+        <div class="logo">Révi<span>AI</span></div>
+        <p>Transforme tes cours en fiches de révision et quiz.</p>
+    </header>
+
+    <main class="container">
+        <section class="card">
+            <div class="section-header">
+                <div>
+                    <h1>Créer une révision</h1>
+                    <p>Envoie un ou plusieurs cours : PDF, DOCX, ODT, PPTX, TXT ou photo.</p>
+                </div>
+            </div>
+
+            <!-- Google AdSense : les annonces peuvent être ajoutées ici après validation du site. -->
+
+            <form id="uploadForm">
+                <label class="upload-area" for="files">
+                    <strong>📚 Choisir tes fichiers</strong>
+                    <span>PDF • DOCX • ODT • PPTX • TXT • JPG • PNG • WEBP</span>
+                    <input id="files" name="files" type="file" multiple accept=".pdf,.docx,.odt,.pptx,.txt,.jpg,.jpeg,.png,.webp">
+                </label>
+
+                <div id="selectedFiles" class="status">Aucun fichier sélectionné.</div>
+                <button type="submit" class="primary-button">✨ Générer ma fiche et mon quiz</button>
+            </form>
+
+            <div id="statusBox" class="status hidden"></div>
+        </section>
+
+        <section id="resultCard" class="card hidden">
+            <div class="section-header">
+                <div>
+                    <h2>Ta fiche de révision</h2>
+                    <p>Une version structurée et fidèle à tes documents.</p>
+                </div>
+            </div>
+            <article id="fiche" class="fiche"></article>
+
+            <!-- Google AdSense : les annonces peuvent être ajoutées ici après validation du site. -->
+        </section>
+
+        <section id="quizCard" class="card hidden">
+            <div class="section-header">
+                <div>
+                    <h2>Quiz de révision</h2>
+                    <p>10 questions, 4 réponses plausibles et une correction immédiate.</p>
+                </div>
+            </div>
+            <div id="quiz"></div>
+            <div id="quizScore" class="quiz-score"></div>
+            <button id="newQuizBtn" class="secondary-button hidden" type="button">🔄 Refaire un test</button>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <a href="/privacy">Confidentialité</a>
+        <a href="/terms">Conditions</a>
+    </footer>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>

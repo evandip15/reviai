@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: reviai
+    env: docker
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.8-flash
+      - key: ADS_ENABLED
+        value: "true"
