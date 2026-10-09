@@ -1,0 +1,64 @@
+{% extends "public_base.html" %}
+{% block title %}Signalements — Espace éditeur RéviAI{% endblock %}
+{% block extra_head %}<meta name="robots" content="noindex, nofollow, noarchive">{% endblock %}
+{% block content %}
+<section class="editorial card admin-card">
+    <div class="admin-heading">
+        <div>
+            <p class="kicker editorial-kicker">ESPACE ÉDITEUR</p>
+            <h1>Signalements d’erreurs</h1>
+            <p>{{ reports|length }} signalement{% if reports|length != 1 %}s{% endif %} récent{% if reports|length != 1 %}s{% endif %}</p>
+        </div>
+        <form method="post" action="{{ url_for('admin_logout') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button class="button button-secondary" type="submit">Se déconnecter</button>
+        </form>
+    </div>
+
+    {% if not persistent_storage %}
+    {% if database_required %}
+    <p class="admin-alert admin-alert-warning">La base de données n’est pas encore connectée. Les nouveaux signalements ne seront pas acceptés tant que <code>DATABASE_URL</code> n’aura pas été configurée dans Render.</p>
+    {% else %}
+    <p class="admin-alert admin-alert-warning">Les retours sont actuellement dans un fichier local. Sur Render en offre gratuite, ce fichier peut être effacé au redémarrage ou à la mise en veille. Configure <code>DATABASE_URL</code> pour les conserver durablement.</p>
+    {% endif %}
+    {% endif %}
+    {% if storage_error %}<p class="admin-alert admin-alert-error" role="alert">{{ storage_error }}</p>{% endif %}
+    {% if status == "deleted" %}<p class="admin-alert admin-alert-success" role="status">Signalement supprimé.</p>{% endif %}
+    {% if status == "missing" %}<p class="admin-alert admin-alert-warning" role="status">Ce signalement n’existe plus.</p>{% endif %}
+    {% if status == "error" %}<p class="admin-alert admin-alert-error" role="alert">La suppression a échoué. Réessaie plus tard.</p>{% endif %}
+
+    {% if reports %}
+    <div class="admin-report-list">
+        {% for report in reports %}
+        <article class="admin-report">
+            <div class="admin-report-head">
+                <div>
+                    <h2>Exercice {{ report.exercise_number or "non précisé" }}</h2>
+                    <time>{{ report.created_at or "Date inconnue" }}</time>
+                </div>
+                <form method="post" action="{{ url_for('admin_delete_feedback', report_id=report.id) }}" onsubmit="return confirm('Supprimer ce signalement ?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button class="button button-secondary admin-delete-button" type="submit">Supprimer</button>
+                </form>
+            </div>
+            <p><strong>Type :</strong>
+                {% if report.category == "mauvaise_lecture" %}Mauvaise lecture de l’énoncé
+                {% elif report.category == "mauvais_exercice" %}Mauvais exercice traité
+                {% elif report.category == "erreur_de_calcul" %}Erreur de calcul ou de réponse
+                {% elif report.category == "explication_incomplete" %}Explication incomplète
+                {% else %}Autre problème{% endif %}
+            </p>
+            <p><strong>Questions :</strong> {{ report.questions|join(", ") if report.questions else "Non précisées" }}</p>
+            <p><strong>Commentaire :</strong> {{ report.comment or "Aucun commentaire" }}</p>
+        </article>
+        {% endfor %}
+    </div>
+    {% elif not storage_error %}
+    <div class="admin-empty-state">
+        <span aria-hidden="true">✓</span>
+        <h2>Aucun signalement pour le moment</h2>
+        <p>Les retours envoyés par les élèves apparaîtront ici.</p>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

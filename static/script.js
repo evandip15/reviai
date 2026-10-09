@@ -15,6 +15,14 @@ const revisionFormCard = document.getElementById("revisionFormCard");
 const exerciseFormCard = document.getElementById("exerciseFormCard");
 const exerciseForm = document.getElementById("exerciseForm");
 const exercisePhotoInput = document.getElementById("exercisePhoto");
+const detectExerciseButton = document.getElementById("detectExerciseButton");
+const exerciseSelectionSection = document.getElementById("exerciseSelectionSection");
+const exerciseDetectionSummary = document.getElementById("exerciseDetectionSummary");
+const exerciseCandidateList = document.getElementById("exerciseCandidateList");
+const exerciseNumberInput = document.getElementById("exerciseNumber");
+const exerciseQuestionField = document.getElementById("exerciseQuestionField");
+const exerciseQuestionChoices = document.getElementById("exerciseQuestionChoices");
+const exerciseHelpMode = document.getElementById("exerciseHelpMode");
 const exerciseInstructionInput = document.getElementById("exerciseInstruction");
 const exerciseDropZone = document.getElementById("exerciseDropZone");
 const exercisePreview = document.getElementById("exercisePreview");
@@ -34,6 +42,12 @@ const exerciseChatInput = document.getElementById("exerciseChatInput");
 const exerciseChatMessages = document.getElementById("exerciseChatMessages");
 const exerciseChatStatus = document.getElementById("exerciseChatStatus");
 const sendExerciseChatButton = document.getElementById("sendExerciseChatButton");
+const openExerciseFeedbackButton = document.getElementById("openExerciseFeedbackButton");
+const exerciseFeedbackForm = document.getElementById("exerciseFeedbackForm");
+const exerciseFeedbackCategory = document.getElementById("exerciseFeedbackCategory");
+const exerciseFeedbackComment = document.getElementById("exerciseFeedbackComment");
+const cancelExerciseFeedbackButton = document.getElementById("cancelExerciseFeedbackButton");
+const exerciseFeedbackStatus = document.getElementById("exerciseFeedbackStatus");
 
 const quizButton = document.getElementById("quizButton");
 const quizCard = document.getElementById("quizCard");
@@ -792,10 +806,94 @@ let selectedExerciseFiles = [];
 let exerciseOriginalPhoto = null;
 let exercisePreviewUrls = [];
 let exerciseSessionId = "";
+let exerciseDetectionId = "";
+let detectedExerciseCandidates = [];
+let selectedExerciseCandidate = null;
+let exerciseFileRevision = 0;
 let exerciseSourceImage = null;
 let exerciseCropStart = null;
 let exerciseCropSelection = null;
 let exerciseCropEncoding = false;
+
+function clearExerciseSelection() {
+    exerciseFileRevision += 1;
+    exerciseDetectionId = "";
+    detectedExerciseCandidates = [];
+    selectedExerciseCandidate = null;
+    exerciseSessionId = "";
+    exerciseResultCard.classList.add("hidden");
+    exerciseSelectionSection.classList.add("hidden");
+    exerciseCandidateList.replaceChildren();
+    exerciseQuestionChoices.replaceChildren();
+    exerciseQuestionField.classList.add("hidden");
+    exerciseDetectionSummary.textContent = "";
+    exerciseNumberInput.value = "";
+    solveExerciseButton.disabled = true;
+}
+
+function renderExerciseQuestionChoices(candidate) {
+    exerciseQuestionChoices.replaceChildren();
+    const questions = Array.isArray(candidate?.questions) ? candidate.questions : [];
+    exerciseQuestionField.classList.toggle("hidden", questions.length === 0);
+    questions.forEach(question => {
+        const label = document.createElement("label");
+        label.className = "exercise-question-choice";
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.name = "selected-exercise-question";
+        checkbox.value = String(question);
+        checkbox.checked = true;
+        const text = document.createElement("span");
+        text.textContent = `Question ${question}`;
+        label.append(checkbox, text);
+        exerciseQuestionChoices.appendChild(label);
+    });
+}
+
+function selectExerciseCandidate(candidate) {
+    selectedExerciseCandidate = candidate;
+    exerciseNumberInput.value = String(candidate.number);
+    exerciseCandidateList.querySelectorAll(".exercise-candidate").forEach(button => {
+        button.classList.toggle("selected", Number(button.dataset.exerciseNumber) === Number(candidate.number));
+    });
+    renderExerciseQuestionChoices(candidate);
+    solveExerciseButton.disabled = false;
+    exerciseDetectionSummary.textContent = `Exercice ${candidate.number} sélectionné. Vérifie les questions cochées avant de lancer la correction.`;
+}
+
+function renderExerciseCandidates(candidates) {
+    detectedExerciseCandidates = Array.isArray(candidates) ? candidates : [];
+    exerciseCandidateList.replaceChildren();
+    detectedExerciseCandidates.forEach(candidate => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "exercise-candidate";
+        button.dataset.exerciseNumber = String(candidate.number);
+        const title = document.createElement("strong");
+        title.textContent = `Exercice ${candidate.number}`;
+        const preview = document.createElement("span");
+        preview.textContent = candidate.preview || "Énoncé détecté";
+        button.append(title, preview);
+        button.addEventListener("click", () => selectExerciseCandidate(candidate));
+        exerciseCandidateList.appendChild(button);
+    });
+
+    if (!detectedExerciseCandidates.length) {
+        exerciseDetectionSummary.textContent = "Je n’ai pas repéré de numéro avec certitude. Saisis-le ci-dessous ; l’IA vérifiera encore le numéro avant d’afficher sa réponse.";
+        exerciseNumberInput.value = "";
+        exerciseQuestionField.classList.add("hidden");
+        solveExerciseButton.disabled = true;
+        return;
+    }
+    if (detectedExerciseCandidates.length === 1) {
+        selectExerciseCandidate(detectedExerciseCandidates[0]);
+        return;
+    }
+    exerciseDetectionSummary.textContent = "Plusieurs exercices apparaissent dans tes fichiers. Clique uniquement sur celui que tu veux faire.";
+    exerciseNumberInput.value = "";
+    exerciseQuestionField.classList.add("hidden");
+    solveExerciseButton.disabled = true;
+}
 
 function drawExerciseCrop() {
     if (!exerciseSourceImage) return;
@@ -816,6 +914,7 @@ function drawExerciseCrop() {
 }
 
 function resetExerciseCrop() {
+    clearExerciseSelection();
     exerciseCropSelection = null;
     exerciseCropStart = null;
     exerciseCropEncoding = false;
@@ -859,6 +958,8 @@ function setExercisePhotos(fileList) {
     const files = Array.from(fileList || []);
     if (!files.length) return;
 
+    clearExerciseSelection();
+    detectExerciseButton.disabled = true;
     exercisePreviewUrls.forEach(url => URL.revokeObjectURL(url));
     exercisePreviewUrls = [];
     const documentExtensions = ["pdf", "docx", "odt", "pptx", "txt"];
@@ -874,11 +975,13 @@ function setExercisePhotos(fileList) {
         exerciseCropSelection = null;
         exercisePreview.classList.add("hidden");
         exerciseCropSection.classList.add("hidden");
+        detectExerciseButton.disabled = true;
         setExerciseStatus(`Format non pris en charge : ${invalidFile.name}. Choisis des photos, PDF, DOCX, ODT, PPTX ou TXT.`, true);
         return;
     }
 
     selectedExerciseFiles = files;
+    detectExerciseButton.disabled = false;
     exerciseOriginalPhoto = null;
     exerciseSourceImage = null;
     exerciseCropSelection = null;
@@ -999,6 +1102,8 @@ confirmExerciseCropButton.addEventListener("click", () => {
         const baseName = originalName.replace(/\.[^.]+$/, "");
         selectedExercisePhoto = new File([blob], `${baseName}-recadre.jpg`, { type: "image/jpeg" });
         selectedExerciseFiles = [selectedExercisePhoto];
+        clearExerciseSelection();
+        detectExerciseButton.disabled = false;
         exerciseCropStatus.textContent = "Zone recadrée prête : seule cette zone sera envoyée.";
         setExerciseStatus("Cadrage prêt. Vérifie le numéro de l’exercice avant de lancer la résolution.");
     }, "image/jpeg", 0.94);
@@ -1048,6 +1153,64 @@ async function waitForExercise(jobId) {
     }
 }
 
+detectExerciseButton.addEventListener("click", async () => {
+    if (!selectedExerciseFiles.length) {
+        setExerciseStatus("Ajoute d’abord une photo ou un document.", true);
+        return;
+    }
+
+    const fileRevision = exerciseFileRevision;
+    detectExerciseButton.disabled = true;
+    solveExerciseButton.disabled = true;
+    exerciseResultCard.classList.add("hidden");
+    setExerciseStatus("Lecture des fichiers pour repérer les exercices…");
+    const data = new FormData();
+    selectedExerciseFiles.forEach(file => data.append("photos", file));
+
+    try {
+        const response = await fetch("/api/detect-exercises", { method: "POST", body: data });
+        const started = await response.json();
+        if (!response.ok) throw new Error(started.error || "Les fichiers n’ont pas pu être analysés.");
+
+        const result = await waitForExercise(started.job_id);
+        if (fileRevision !== exerciseFileRevision) {
+            setExerciseStatus("Les fichiers ont changé pendant le repérage. Relance l’analyse sur les nouveaux fichiers.", true);
+            return;
+        }
+        exerciseDetectionId = typeof result.detection_id === "string" ? result.detection_id : "";
+        if (!exerciseDetectionId) throw new Error("La détection a expiré. Analyse à nouveau tes fichiers.");
+        exerciseSelectionSection.classList.remove("hidden");
+        renderExerciseCandidates(result.exercises);
+        setExerciseStatus(result.message || "Choisis l’exercice à résoudre.");
+        exerciseSelectionSection.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    } catch (error) {
+        console.error(error);
+        clearExerciseSelection();
+        setExerciseStatus(error.message || "Impossible de repérer les exercices.", true);
+    } finally {
+        detectExerciseButton.disabled = selectedExerciseFiles.length === 0;
+    }
+});
+
+exerciseNumberInput.addEventListener("input", () => {
+    const value = exerciseNumberInput.value.trim();
+    const match = detectedExerciseCandidates.find(item => String(item.number) === value);
+    if (match) {
+        selectExerciseCandidate(match);
+        return;
+    }
+
+    selectedExerciseCandidate = null;
+    exerciseCandidateList.querySelectorAll(".exercise-candidate").forEach(button => button.classList.remove("selected"));
+    exerciseQuestionChoices.replaceChildren();
+    exerciseQuestionField.classList.add("hidden");
+    const validNumber = /^\d{1,3}$/.test(value);
+    solveExerciseButton.disabled = !exerciseDetectionId || !validNumber;
+    if (validNumber && exerciseDetectionId) {
+        exerciseDetectionSummary.textContent = `Exercice ${value} saisi manuellement. Le numéro n’a pas été repéré dans le texte ; l’IA devra le confirmer avant d’afficher la réponse.`;
+    }
+});
+
 exerciseForm.addEventListener("submit", async event => {
     event.preventDefault();
 
@@ -1055,15 +1218,35 @@ exerciseForm.addEventListener("submit", async event => {
         setExerciseStatus("Ajoute une photo ou un document de ton exercice pour commencer.", true);
         return;
     }
+    if (!exerciseDetectionId) {
+        setExerciseStatus("Clique d’abord sur « Repérer les exercices » pour choisir le bon numéro.", true);
+        return;
+    }
+    if (!/^\d{1,3}$/.test(exerciseNumberInput.value.trim())) {
+        setExerciseStatus("Choisis un exercice dans la liste ou saisis son numéro.", true);
+        return;
+    }
+
+    const questionInputs = Array.from(exerciseQuestionChoices.querySelectorAll('input[name="selected-exercise-question"]'));
+    const selectedQuestions = questionInputs.filter(input => input.checked).map(input => input.value);
+    if (questionInputs.length && !selectedQuestions.length) {
+        setExerciseStatus("Garde au moins une question cochée pour lancer la correction.", true);
+        return;
+    }
 
     solveExerciseButton.disabled = true;
     solveExerciseButton.textContent = "Résolution en cours…";
+    const fileRevision = exerciseFileRevision;
     exerciseResultCard.classList.add("hidden");
     exerciseSessionId = "";
     setExerciseStatus(selectedExerciseFiles.length > 1 ? "Envoi des fichiers…" : "Envoi du fichier…");
 
     const data = new FormData();
     selectedExerciseFiles.forEach(file => data.append("photos", file));
+    data.append("detection_id", exerciseDetectionId);
+    data.append("exercise_number", exerciseNumberInput.value.trim());
+    selectedQuestions.forEach(question => data.append("questions", question));
+    data.append("help_mode", exerciseHelpMode.value);
     data.append("instruction", exerciseInstructionInput.value.trim());
 
     try {
@@ -1072,6 +1255,9 @@ exerciseForm.addEventListener("submit", async event => {
         if (!response.ok) throw new Error(started.error || "Les fichiers n'ont pas pu être envoyés.");
 
         const result = await waitForExercise(started.job_id);
+        if (fileRevision !== exerciseFileRevision) {
+            throw new Error("Les fichiers ont changé pendant la résolution. Choisis à nouveau l’exercice.");
+        }
         const solution = result && typeof result.solution === "string" ? result.solution : "";
         if (!solution.trim()) throw new Error("L'IA n'a renvoyé aucune explication.");
 
@@ -1081,6 +1267,11 @@ exerciseForm.addEventListener("submit", async event => {
         exerciseChatInput.value = "";
         exerciseChatStatus.textContent = "";
         exerciseChatStatus.classList.remove("error");
+        exerciseFeedbackForm.classList.add("hidden");
+        exerciseFeedbackForm.reset();
+        exerciseFeedbackStatus.textContent = "";
+        exerciseFeedbackStatus.classList.remove("error");
+        openExerciseFeedbackButton.disabled = false;
         exerciseResultCard.classList.remove("hidden");
         setExerciseStatus("Exercice résolu !");
         exerciseResultCard.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1088,7 +1279,7 @@ exerciseForm.addEventListener("submit", async event => {
         console.error(error);
         setExerciseStatus(error.message || "Une erreur est survenue pendant la résolution.", true);
     } finally {
-        solveExerciseButton.disabled = false;
+        solveExerciseButton.disabled = !exerciseDetectionId || !/^\d{1,3}$/.test(exerciseNumberInput.value.trim());
         solveExerciseButton.textContent = "✨ Résoudre mon exercice";
     }
 });
@@ -1196,6 +1387,65 @@ exerciseChatForm.addEventListener("submit", async event => {
     } finally {
         sendExerciseChatButton.disabled = false;
         exerciseChatInput.focus();
+    }
+});
+
+document.querySelectorAll(".exercise-quick-help-button").forEach(button => {
+    button.addEventListener("click", () => {
+        exerciseChatInput.value = button.dataset.chatMessage || "";
+        exerciseChatForm.requestSubmit();
+    });
+});
+
+openExerciseFeedbackButton.addEventListener("click", () => {
+    exerciseFeedbackForm.classList.remove("hidden");
+    exerciseFeedbackStatus.textContent = "";
+    exerciseFeedbackStatus.classList.remove("error");
+    exerciseFeedbackCategory.focus();
+});
+
+cancelExerciseFeedbackButton.addEventListener("click", () => {
+    exerciseFeedbackForm.classList.add("hidden");
+});
+
+exerciseFeedbackForm.addEventListener("submit", async event => {
+    event.preventDefault();
+    if (!exerciseSessionId) {
+        exerciseFeedbackStatus.textContent = "La correction à signaler a expiré. Relance l’exercice puis réessaie.";
+        exerciseFeedbackStatus.classList.add("error");
+        return;
+    }
+    if (!exerciseFeedbackCategory.value) {
+        exerciseFeedbackStatus.textContent = "Choisis le type de problème rencontré.";
+        exerciseFeedbackStatus.classList.add("error");
+        return;
+    }
+
+    const submitButton = exerciseFeedbackForm.querySelector('button[type="submit"]');
+    submitButton.disabled = true;
+    exerciseFeedbackStatus.textContent = "Envoi du signalement…";
+    exerciseFeedbackStatus.classList.remove("error");
+    try {
+        const response = await fetch("/api/exercise-feedback", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                session_id: exerciseSessionId,
+                category: exerciseFeedbackCategory.value,
+                comment: exerciseFeedbackComment.value.trim(),
+            }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Le signalement n’a pas pu être envoyé.");
+        exerciseFeedbackStatus.textContent = result.message || "Merci pour ton signalement.";
+        exerciseFeedbackForm.reset();
+        openExerciseFeedbackButton.disabled = true;
+    } catch (error) {
+        console.error(error);
+        exerciseFeedbackStatus.textContent = error.message || "Impossible d’envoyer le signalement.";
+        exerciseFeedbackStatus.classList.add("error");
+    } finally {
+        submitButton.disabled = false;
     }
 });
 

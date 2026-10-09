@@ -13,7 +13,8 @@
     </section>
 
     <section class="editorial-section"><h2>Fichiers et messages envoyés</h2>
-        <p>Lorsque tu importes un document ou une photo, RéviAI le reçoit pour en extraire le contenu puis créer une fiche ou résoudre l’exercice. Les fichiers téléchargés sont temporaires et supprimés par le serveur après le traitement. Le texte de la fiche, du cours et de la conversation d’exercice est gardé en mémoire pour permettre le quiz et les questions de suivi, puis expire au bout d’une heure. RéviAI ne demande pas de compte personnel.</p>
+        <p>Lorsque tu importes un document ou une photo, RéviAI le reçoit pour en extraire le contenu puis créer une fiche ou résoudre l’exercice. Les fichiers téléchargés sont temporaires et supprimés par le serveur après le traitement. Le texte du cours, les énoncés repérés, les fiches et les conversations d’exercice sont gardés en mémoire pour permettre la sélection, le quiz et les questions de suivi, puis expirent au bout d’une heure. RéviAI ne demande pas de compte personnel.</p>
+        <p>Si tu envoies volontairement un signalement sur une correction, son type, le numéro de l’exercice, les questions sélectionnées et ton commentaire sont enregistrés dans le stockage configuré par l’éditeur afin qu’il puisse les examiner. Ils sont consultables dans un espace privé protégé par mot de passe. Si une base PostgreSQL externe est configurée, son fournisseur héberge ces signalements selon ses propres conditions et règles de confidentialité. Le signalement n’est pas associé à un compte RéviAI et reste conservé jusqu’à sa suppression par l’éditeur. N’y inclus aucune donnée personnelle ou confidentielle.</p>
         <p>Ne téléverse pas d’informations médicales, financières, de mots de passe, ni de données personnelles qui ne sont pas nécessaires à l’exercice. Les fichiers et les réponses transitent aussi par l’hébergeur du site, qui peut traiter des données techniques de connexion (par exemple l’adresse IP, l’heure et le navigateur) pour assurer le fonctionnement et la sécurité du service, selon ses propres règles de conservation.</p>
     </section>
 
@@ -29,7 +30,7 @@
     </section>
 
     <section class="editorial-section"><h2>Durée et demandes</h2>
-        <p>Les fichiers importés sont supprimés à la fin du traitement. Les contenus nécessaires aux fonctions de fiche, quiz et chat sont gardés temporairement en mémoire, jusqu’à une heure. Il n’existe pas de profil utilisateur ni d’historique permanent.</p>
+        <p>Les fichiers importés sont supprimés à la fin du traitement. Les contenus nécessaires aux fonctions de fiche, quiz, repérage d’exercice et chat sont gardés temporairement en mémoire, jusqu’à une heure. Il n’existe pas de profil utilisateur ni d’historique permanent ; seuls les signalements envoyés volontairement sont conservés jusqu’à leur suppression par l’éditeur. La conservation des signalements dépend du stockage configuré par l’éditeur.</p>
     </section>
 </article>
 {% endblock %}

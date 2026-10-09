@@ -20,6 +20,14 @@ services:
         sync: false
       - key: SESSION_SECRET
         sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: FEEDBACK_DATABASE_REQUIRED
+        value: "true"
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
       - key: ADS_ENABLED
         value: "false"
       - key: ADS_CONSENT_READY

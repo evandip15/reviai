@@ -3,11 +3,19 @@ import random
 import re
 import secrets
 import time
+import json
+import hashlib
+import hmac
+from datetime import timedelta
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Lock
 
-from flask import Flask, jsonify, render_template, request
+try:
+    import psycopg
+except ModuleNotFoundError:  # Le mode fichier local fonctionne sans PostgreSQL.
+    psycopg = None
+from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
 
@@ -45,15 +53,200 @@ DEFAULT_PUBLIC_BASE_URL = "https://reviai.onrender.com"
 app = Flask(__name__)
 app.secret_key = os.getenv("SESSION_SECRET", secrets.token_hex(32))
 app.config["MAX_CONTENT_LENGTH"] = MAX_MB * 1024 * 1024
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.getenv("SESSION_COOKIE_SECURE", "false").lower() == "true",
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
+)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 STATE_LOCK = Lock()
+FEEDBACK_LOCK = Lock()
 LATEST_BY_SESSION = {}
 JOBS = {}
 EXERCISE_SESSIONS = {}
+EXERCISE_DETECTIONS = {}
+FEEDBACK_PATH = BASE_DIR / "data" / "exercise_feedback.jsonl"
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
+FEEDBACK_DATABASE_REQUIRED = os.getenv("FEEDBACK_DATABASE_REQUIRED", "false").lower() == "true"
+FEEDBACK_TABLE = "reviai_exercise_feedback"
 
 # Un seul traitement IA à la fois sur le petit serveur gratuit.
 EXECUTOR = ThreadPoolExecutor(max_workers=1)
+
+
+class FeedbackStorageError(Exception):
+    """Signale une erreur de lecture ou d'écriture des signalements."""
+
+
+def feedback_database_connection():
+    if psycopg is None:
+        raise FeedbackStorageError("Le pilote PostgreSQL n'est pas installé.")
+    database_url = DATABASE_URL
+    if database_url.startswith("postgres://"):
+        database_url = "postgresql://" + database_url[len("postgres://"):]
+    return psycopg.connect(database_url, connect_timeout=5)
+
+
+def ensure_feedback_table(connection):
+    connection.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS {FEEDBACK_TABLE} (
+            id TEXT PRIMARY KEY,
+            created_at TEXT NOT NULL,
+            exercise_number TEXT,
+            questions JSONB NOT NULL DEFAULT '[]'::jsonb,
+            category TEXT NOT NULL,
+            comment TEXT NOT NULL
+        )
+        """
+    )
+
+
+def legacy_feedback_id(report, raw_line):
+    existing_id = report.get("id")
+    if existing_id:
+        return str(existing_id)
+    digest = hashlib.sha256(raw_line.encode("utf-8")).hexdigest()[:24]
+    return f"legacy-{digest}"
+
+
+def save_feedback_report(report):
+    if DATABASE_URL:
+        try:
+            with feedback_database_connection() as connection:
+                ensure_feedback_table(connection)
+                connection.execute(
+                    f"""
+                    INSERT INTO {FEEDBACK_TABLE}
+                        (id, created_at, exercise_number, questions, category, comment)
+                    VALUES (%s, %s, %s, %s::jsonb, %s, %s)
+                    """,
+                    (
+                        report["id"],
+                        report["created_at"],
+                        str(report["exercise_number"]) if report.get("exercise_number") is not None else None,
+                        json.dumps(report.get("questions", []), ensure_ascii=False),
+                        report["category"],
+                        report["comment"],
+                    ),
+                )
+            return
+        except Exception as exc:
+            raise FeedbackStorageError("Impossible d'enregistrer le signalement dans la base de données.") from exc
+
+    if FEEDBACK_DATABASE_REQUIRED:
+        raise FeedbackStorageError("Le stockage permanent des signalements n'est pas encore configuré.")
+
+    try:
+        with FEEDBACK_LOCK:
+            with FEEDBACK_PATH.open("a", encoding="utf-8") as feedback_file:
+                feedback_file.write(json.dumps(report, ensure_ascii=False) + "\n")
+    except OSError as exc:
+        raise FeedbackStorageError("Impossible d'enregistrer le signalement dans le fichier local.") from exc
+
+
+def list_feedback_reports(limit=1000):
+    if DATABASE_URL:
+        try:
+            with feedback_database_connection() as connection:
+                ensure_feedback_table(connection)
+                rows = connection.execute(
+                    f"""
+                    SELECT id, created_at, exercise_number, questions, category, comment
+                    FROM {FEEDBACK_TABLE}
+                    ORDER BY created_at DESC, id DESC
+                    LIMIT %s
+                    """,
+                    (limit,),
+                ).fetchall()
+            return [
+                {
+                    "id": row[0],
+                    "created_at": row[1],
+                    "exercise_number": row[2],
+                    "questions": row[3] if isinstance(row[3], list) else json.loads(row[3] or "[]"),
+                    "category": row[4],
+                    "comment": row[5],
+                }
+                for row in rows
+            ]
+        except Exception as exc:
+            raise FeedbackStorageError("Impossible de lire les signalements dans la base de données.") from exc
+
+    reports = []
+    try:
+        with FEEDBACK_LOCK:
+            with FEEDBACK_PATH.open("r", encoding="utf-8") as feedback_file:
+                for raw_line in feedback_file:
+                    try:
+                        report = json.loads(raw_line)
+                    except json.JSONDecodeError:
+                        continue
+                    if not isinstance(report, dict):
+                        continue
+                    report["id"] = legacy_feedback_id(report, raw_line.rstrip("\r\n"))
+                    reports.append(report)
+    except FileNotFoundError:
+        return []
+    except OSError as exc:
+        raise FeedbackStorageError("Impossible de lire le fichier local des signalements.") from exc
+    reports.sort(key=lambda item: item.get("created_at", ""), reverse=True)
+    return reports[:limit]
+
+
+def delete_feedback_report(report_id):
+    if DATABASE_URL:
+        try:
+            with feedback_database_connection() as connection:
+                ensure_feedback_table(connection)
+                result = connection.execute(
+                    f"DELETE FROM {FEEDBACK_TABLE} WHERE id = %s",
+                    (report_id,),
+                )
+                return result.rowcount > 0
+        except Exception as exc:
+            raise FeedbackStorageError("Impossible de supprimer le signalement de la base de données.") from exc
+
+    try:
+        with FEEDBACK_LOCK:
+            kept_lines = []
+            found = False
+            if FEEDBACK_PATH.exists():
+                with FEEDBACK_PATH.open("r", encoding="utf-8") as feedback_file:
+                    for raw_line in feedback_file:
+                        try:
+                            report = json.loads(raw_line)
+                        except json.JSONDecodeError:
+                            kept_lines.append(raw_line)
+                            continue
+                        if isinstance(report, dict) and legacy_feedback_id(report, raw_line.rstrip("\r\n")) == report_id:
+                            found = True
+                        else:
+                            kept_lines.append(raw_line)
+            if found:
+                temporary_path = FEEDBACK_PATH.with_suffix(".tmp")
+                with temporary_path.open("w", encoding="utf-8") as feedback_file:
+                    feedback_file.writelines(kept_lines)
+                os.replace(temporary_path, FEEDBACK_PATH)
+            return found
+    except OSError as exc:
+        raise FeedbackStorageError("Impossible de supprimer le signalement du fichier local.") from exc
+
+
+def admin_csrf_token():
+    token = session.get("admin_csrf_token")
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session["admin_csrf_token"] = token
+    return token
+
+
+def valid_admin_csrf(token):
+    expected = session.get("admin_csrf_token", "")
+    return bool(expected and token and hmac.compare_digest(expected, token))
 
 
 def cleanup_temp(paths):
@@ -78,7 +271,7 @@ def set_job(job_id, **updates):
 def expire_old_sessions_locked():
     """Évite de garder indéfiniment les cours et exercices en mémoire."""
     now = time.time()
-    for sessions in (LATEST_BY_SESSION, EXERCISE_SESSIONS):
+    for sessions in (LATEST_BY_SESSION, EXERCISE_SESSIONS, EXERCISE_DETECTIONS):
         expired = [
             key for key, value in sessions.items()
             if now - value.get("created", now) > SESSION_TTL_SECONDS
@@ -239,12 +432,148 @@ def _answer_exercise_number(solution):
     return None
 
 
-def process_exercise(job_id, saved_files, instruction=""):
+def _split_detected_exercises(text):
+    """Repère les exercices numérotés et garde leur énoncé jusqu'au suivant."""
+    heading_pattern = re.compile(
+        r"(?im)^[ \t]*(?:exercice|exo)\s*(?:n(?:um[eé]ro)?\s*[°o.]?\s*)?(\d{1,3})\b[^\n]*"
+        r"|^[ \t]*(\d{2,3})(?:[ \t]+(?=[A-ZÀ-ÖØ-Þ«(\[])|[ \t]*$)[^\n]*"
+    )
+    headings = list(heading_pattern.finditer(str(text or "")))
+    exercises = {}
+    for index, heading in enumerate(headings):
+        number_text = heading.group(1) or heading.group(2)
+        if not number_text:
+            continue
+        number = int(number_text)
+        end = headings[index + 1].start() if index + 1 < len(headings) else len(text)
+        statement = str(text[heading.start():end]).strip()
+        if not statement:
+            continue
+
+        question_numbers = []
+        for line in statement.splitlines()[1:]:
+            question = re.match(r"^\s*(\d{1,2})\s*[.)]\s+\S", line)
+            if question and question.group(1) not in question_numbers:
+                question_numbers.append(question.group(1))
+
+        if number in exercises:
+            exercises[number]["text"] += "\n\n" + statement
+            for question_number in question_numbers:
+                if question_number not in exercises[number]["questions"]:
+                    exercises[number]["questions"].append(question_number)
+        else:
+            exercises[number] = {
+                "text": statement,
+                "questions": question_numbers,
+            }
+    return exercises
+
+
+def _read_exercise_source(path):
+    extension = path.suffix.lower()
+    provider = os.getenv("AI_PROVIDER", "auto").strip().lower()
+    has_gemini_key = bool(os.getenv("GEMINI_API_KEY", "").strip())
+    use_gemini = provider == "gemini" or (provider != "ollama" and has_gemini_key)
+
+    if extension in IMAGE_EXTENSIONS and use_gemini:
+        return extract_image_text_gemini(
+            path,
+            mime_type=uploaded_mime_from_extension(extension),
+        ).strip()
+
+    extracted = read_file(path).strip()
+    if extension == ".pdf" and len(extracted) < 60 and has_gemini_key:
+        extracted = extract_document_text_gemini(path).strip()
+    return extracted
+
+
+def process_exercise_detection(job_id, saved_files):
+    temp_paths = [item[0] for item in saved_files]
+    try:
+        set_job(job_id, status="reading", message="Repérage des exercices dans les fichiers…")
+        pages = []
+        for index, (path, original_name) in enumerate(saved_files, start=1):
+            try:
+                extracted = _read_exercise_source(path)
+            except Exception as exc:
+                raise RuntimeError(f"Impossible de lire {original_name} : {exc}") from exc
+            if extracted:
+                pages.append(f"===== PAGE {index} : {original_name} =====\n\n{extracted}")
+
+        full_text = "\n\n".join(pages).strip()
+        if not full_text:
+            raise RuntimeError("Aucun texte lisible n’a été trouvé dans les fichiers.")
+
+        exercises = _split_detected_exercises(full_text)
+        detection_id = make_id()
+        with STATE_LOCK:
+            expire_old_sessions_locked()
+            EXERCISE_DETECTIONS[detection_id] = {
+                "text": full_text,
+                "exercises": exercises,
+                "created": time.time(),
+            }
+
+        candidates = [
+            {
+                "number": number,
+                "preview": re.sub(r"\s+", " ", exercise["text"])[:260],
+                "questions": exercise["questions"],
+            }
+            for number, exercise in sorted(exercises.items())
+        ]
+        set_job(
+            job_id,
+            status="done",
+            message=(
+                f"{len(candidates)} exercice(s) repéré(s). Choisis celui que tu veux faire."
+                if candidates
+                else "Aucun numéro n’a été repéré automatiquement. Tu peux saisir le numéro manuellement."
+            ),
+            result={
+                "success": True,
+                "detection_id": detection_id,
+                "exercises": candidates,
+                "detected": bool(candidates),
+            },
+        )
+    except Exception as exc:
+        set_job(job_id, status="error", message=str(exc))
+    finally:
+        cleanup_temp(temp_paths)
+
+
+def process_exercise(
+    job_id,
+    saved_files,
+    instruction="",
+    exercise_number=None,
+    selected_questions=None,
+    help_mode="complete",
+    detection_id="",
+):
     temp_paths = [item[0] for item in saved_files]
     original_names = [item[1] for item in saved_files]
     exercise_text = ""
     try:
         set_job(job_id, status="reading", message="Lecture des photos ou documents…")
+
+        detection = None
+        if detection_id:
+            with STATE_LOCK:
+                cached = EXERCISE_DETECTIONS.get(detection_id)
+                detection = dict(cached) if cached else None
+        selected_statement = ""
+        solver_questions = list(selected_questions or [])
+        if detection and exercise_number is not None:
+            candidate = detection.get("exercises", {}).get(exercise_number)
+            if candidate:
+                selected_statement = candidate.get("text", "")
+                detected_questions = set(candidate.get("questions", []))
+                if detected_questions and set(solver_questions) == detected_questions:
+                    solver_questions = []
+        if selected_statement:
+            exercise_text = selected_statement
 
         all_images = all(path.suffix.lower() in IMAGE_EXTENSIONS for path in temp_paths)
         provider = os.getenv("AI_PROVIDER", "auto").strip().lower()
@@ -261,10 +590,22 @@ def process_exercise(job_id, saved_files, instruction=""):
                     for path in temp_paths
                 ],
                 instruction=instruction,
+                exercise_number=exercise_number,
+                selected_questions=solver_questions,
+                help_mode=help_mode,
+                selected_statement=selected_statement,
+            )
+        elif selected_statement:
+            set_job(job_id, status="generating", message="Résolution de l’exercice et des questions choisies…")
+            solution = solve_exercise_text(
+                selected_statement,
+                instruction=instruction,
+                exercise_number=exercise_number,
+                selected_questions=solver_questions,
+                help_mode=help_mode,
             )
         else:
             extracted_pages = []
-            requested_number = _requested_exercise_number(instruction)
             for index, (path, original_name) in enumerate(saved_files, start=1):
                 extension = path.suffix.lower()
                 is_image = extension in IMAGE_EXTENSIONS
@@ -275,11 +616,8 @@ def process_exercise(job_id, saved_files, instruction=""):
                             mime_type=uploaded_mime_from_extension(extension),
                         ).strip()
                     else:
-                        # Le recadrage OCR par numéro est utile pour une image
-                        # seule. En lot, chaque image peut être une page de
-                        # continuation sans répéter le numéro de l'exercice.
                         target_number = (
-                            requested_number
+                            exercise_number
                             if len(saved_files) == 1 and is_image
                             else None
                         )
@@ -305,17 +643,32 @@ def process_exercise(job_id, saved_files, instruction=""):
                 )
 
             set_job(job_id, status="generating", message="Résolution de l'exercice par l'IA…")
-            solution = solve_exercise_text(exercise_text, instruction=instruction)
+            solution = solve_exercise_text(
+                exercise_text,
+                instruction=instruction,
+                exercise_number=exercise_number,
+                selected_questions=solver_questions,
+                help_mode=help_mode,
+            )
 
         if not solution.strip():
             raise RuntimeError("L'IA n'a pas généré de résolution.")
 
-        requested_number = _requested_exercise_number(instruction)
         answer_number = _answer_exercise_number(solution)
-        if requested_number is not None and answer_number is not None and answer_number != requested_number:
+        if exercise_number is not None and answer_number != exercise_number:
             raise RuntimeError(
-                f"La réponse désigne l’exercice {answer_number} alors que tu as demandé le {requested_number}. "
-                "Je l’ai bloquée pour éviter de t’afficher le mauvais exercice."
+                f"La réponse n’a pas confirmé l’exercice {exercise_number} demandé. "
+                "Je l’ai bloquée pour éviter de t’afficher une correction possiblement mélangée. "
+                "Vérifie le numéro ou envoie une photo plus nette."
+            )
+
+        other_exercises = {
+            int(number)
+            for number in re.findall(r"(?i)\b(?:exercice|exo)\s*(?:n\s*[°o.]?\s*)?(\d{1,3})\b", solution)
+        }
+        if exercise_number is not None and any(number != exercise_number for number in other_exercises):
+            raise RuntimeError(
+                "La réponse a mentionné un exercice voisin. Je l’ai bloquée : relance avec une photo plus nette ou recadrée."
             )
 
         session_key = make_id()
@@ -325,6 +678,8 @@ def process_exercise(job_id, saved_files, instruction=""):
                 "context": exercise_text or solution,
                 "instruction": instruction,
                 "initial_solution": solution,
+                "exercise_number": exercise_number,
+                "selected_questions": list(selected_questions or []),
                 "history": [],
                 "created": time.time(),
             }
@@ -338,6 +693,7 @@ def process_exercise(job_id, saved_files, instruction=""):
                 "solution": solution,
                 "source": ", ".join(original_names),
                 "session_id": session_key,
+                "exercise_number": exercise_number,
             },
         )
     except Exception as exc:
@@ -364,7 +720,7 @@ GUIDES = {
         "description": "Conseils pour envoyer un énoncé lisible, choisir un exercice précis et vérifier une correction étape par étape.",
         "intro": "Une page peut contenir plusieurs exercices et un énoncé peut continuer sur plusieurs pages. Donner un numéro précis et envoyer les photos dans l’ordre aide à isoler la bonne consigne ; une image lisible et une vérification des hypothèses restent essentielles.",
         "sections": [
-            {"heading": "Avant l’envoi", "paragraphs": ["Pose la page à plat, évite l’ombre portée et garde les bords de l’exercice visibles. Vérifie que les indices, signes, fractions, unités et lettres du schéma sont lisibles.", "Si l’énoncé couvre plusieurs pages, sélectionne toutes les photos ensemble dans l’ordre de lecture : elles seront envoyées comme un seul exercice. S’il y a plusieurs exercices sur la page, indique par exemple « exercice 63 uniquement » et précise les questions voulues. Le recadrage est facultatif et n’apparaît que pour une photo seule."]},
+            {"heading": "Avant l’envoi", "paragraphs": ["Pose la page à plat, évite l’ombre portée et garde les bords de l’exercice visibles. Vérifie que les indices, signes, fractions, unités et lettres du schéma sont lisibles.", "Si l’énoncé couvre plusieurs pages, sélectionne toutes les photos ensemble dans l’ordre de lecture : elles seront envoyées comme un seul exercice. Après l’analyse, choisis le numéro repéré et coche les questions à traiter. Si aucun numéro n’est reconnu, saisis-le manuellement. Le recadrage reste facultatif."]},
             {"heading": "Formats pris en charge", "paragraphs": ["Le mode exercice accepte les images JPG, JPEG, PNG et WEBP, ainsi que les documents PDF, DOCX, ODT, PPTX et TXT. Les documents doivent contenir du texte exploitable. Un PDF composé uniquement de pages scannées peut nécessiter une photo de la page ou la lecture PDF par Gemini lorsque cette option est configurée."]},
             {"heading": "Lire la réponse avec méthode", "paragraphs": ["Commence par vérifier que le numéro et la consigne repris par la réponse correspondent à ta demande. Compare ensuite les données de départ, les formules utilisées et les unités ou coefficients.", "Dans un exercice de maths, demande à l’IA d’expliquer une étape ou une autre méthode au lieu de recopier une réponse sans la comprendre. Tu peux poursuivre la conversation dans le mode exercice."]},
             {"heading": "Que faire si l’énoncé est mal lu ?", "paragraphs": ["Corrige les caractères ambigus dans ta consigne (par exemple AB ou AD, un signe moins, un exposant ou un point décimal) et renvoie une image plus nette si une donnée manque. Une solution ne doit pas inventer le contenu illisible.", "Les réponses sont générées automatiquement : compare-les au cours et aux attentes de ton enseignant. RéviAI sert d’aide à l’apprentissage, pas de validation officielle."]},
@@ -484,6 +840,96 @@ def faq():
     return render_template("faq.html")
 
 
+@app.after_request
+def protect_admin_responses(response):
+    if request.path.startswith("/admin"):
+        response.headers["Cache-Control"] = "no-store, private"
+        response.headers["X-Robots-Tag"] = "noindex, nofollow, noarchive"
+    return response
+
+
+@app.route("/admin", methods=["GET", "POST"])
+def admin_login():
+    if not ADMIN_PASSWORD:
+        return render_template("admin_login.html", configured=False), 503
+    if session.get("admin_authenticated"):
+        return redirect(url_for("admin_feedback"))
+
+    error = ""
+    status_code = 200
+    if request.method == "POST":
+        if not valid_admin_csrf(request.form.get("csrf_token", "")):
+            error = "La session a expiré. Recharge la page puis réessaie."
+            status_code = 400
+        elif hmac.compare_digest(request.form.get("password", ""), ADMIN_PASSWORD):
+            session.clear()
+            session["admin_authenticated"] = True
+            session["admin_csrf_token"] = secrets.token_urlsafe(32)
+            session.permanent = True
+            return redirect(url_for("admin_feedback"))
+        else:
+            error = "Mot de passe incorrect."
+            status_code = 401
+
+    return render_template(
+        "admin_login.html",
+        configured=True,
+        error=error,
+        csrf_token=admin_csrf_token(),
+    ), status_code
+
+
+@app.route("/admin/signalements")
+def admin_feedback():
+    if not ADMIN_PASSWORD:
+        return render_template("admin_login.html", configured=False), 503
+    if not session.get("admin_authenticated"):
+        return redirect(url_for("admin_login"))
+
+    try:
+        reports = list_feedback_reports()
+        storage_error = ""
+    except FeedbackStorageError:
+        app.logger.exception("Lecture des signalements impossible")
+        reports = []
+        storage_error = "Impossible de charger les signalements. Vérifie la connexion au stockage configuré."
+
+    return render_template(
+        "admin_feedback.html",
+        reports=reports,
+        csrf_token=admin_csrf_token(),
+        persistent_storage=bool(DATABASE_URL),
+        database_required=FEEDBACK_DATABASE_REQUIRED,
+        storage_error=storage_error,
+        status=request.args.get("status", ""),
+    )
+
+
+@app.route("/admin/signalements/<report_id>/supprimer", methods=["POST"])
+def admin_delete_feedback(report_id):
+    if not ADMIN_PASSWORD:
+        return render_template("admin_login.html", configured=False), 503
+    if not session.get("admin_authenticated"):
+        return redirect(url_for("admin_login"))
+    if not valid_admin_csrf(request.form.get("csrf_token", "")):
+        return "Session expirée. Recharge la page et réessaie.", 400
+
+    try:
+        deleted = delete_feedback_report(report_id)
+    except FeedbackStorageError:
+        app.logger.exception("Suppression d'un signalement impossible")
+        return redirect(url_for("admin_feedback", status="error"))
+    return redirect(url_for("admin_feedback", status="deleted" if deleted else "missing"))
+
+
+@app.route("/admin/deconnexion", methods=["POST"])
+def admin_logout():
+    if not valid_admin_csrf(request.form.get("csrf_token", "")):
+        return "Session expirée. Recharge la page et réessaie.", 400
+    session.clear()
+    return redirect(url_for("admin_login"))
+
+
 @app.route("/api/health")
 def health():
     return jsonify({"ok": True})
@@ -573,6 +1019,46 @@ def generation_status(job_id):
     return jsonify(response)
 
 
+@app.route("/api/detect-exercises", methods=["POST"])
+def detect_exercises():
+    uploaded_files = request.files.getlist("photos")
+    uploaded_files = [item for item in uploaded_files if item and item.filename]
+    if not uploaded_files:
+        return jsonify({"error": "Ajoute au moins une photo ou un document à analyser."}), 400
+
+    saved_files = []
+    try:
+        for uploaded in uploaded_files:
+            original_name = uploaded.filename
+            extension = Path(original_name).suffix.lower()
+            if extension not in ALLOWED_EXTENSIONS:
+                extension = MIME_TO_EXTENSION.get((uploaded.mimetype or "").lower(), extension)
+            if extension not in ALLOWED_EXTENSIONS:
+                cleanup_temp([item[0] for item in saved_files])
+                return jsonify({"error": f"Format non pris en charge : {original_name}."}), 400
+
+            safe_name = secure_filename(original_name)
+            if not safe_name or Path(safe_name).suffix.lower() not in ALLOWED_EXTENSIONS:
+                safe_name = f"exercice{extension}"
+            destination = UPLOAD_DIR / f"repere_{secrets.token_hex(6)}_{safe_name}"
+            uploaded.save(destination)
+            saved_files.append((destination, original_name))
+
+        job_id = make_id()
+        with STATE_LOCK:
+            JOBS[job_id] = {
+                "status": "queued",
+                "message": "Préparation du repérage…",
+                "created": time.time(),
+                "result": None,
+            }
+        EXECUTOR.submit(process_exercise_detection, job_id, saved_files)
+        return jsonify({"success": True, "job_id": job_id})
+    except Exception as exc:
+        cleanup_temp([item[0] for item in saved_files])
+        return jsonify({"error": str(exc)}), 500
+
+
 @app.route("/api/solve-exercise", methods=["POST"])
 def solve_exercise():
     uploaded_files = request.files.getlist("photos")
@@ -583,8 +1069,22 @@ def solve_exercise():
         return jsonify({"error": "Choisis au moins une photo ou un document de ton exercice."}), 400
 
     instruction = str(request.form.get("instruction", "")).strip()[:1000]
-    if not instruction:
-        return jsonify({"error": "Précise le numéro ou le nom de l'exercice à résoudre."}), 400
+    raw_number = str(request.form.get("exercise_number", "")).strip()
+    exercise_number = int(raw_number) if re.fullmatch(r"\d{1,3}", raw_number) else None
+    if exercise_number is None:
+        exercise_number = _requested_exercise_number(instruction)
+    if exercise_number is None:
+        return jsonify({"error": "Choisis un exercice détecté ou saisis son numéro."}), 400
+
+    selected_questions = []
+    for item in request.form.getlist("questions")[:20]:
+        question = str(item).strip().lower()
+        if re.fullmatch(r"\d{1,2}[a-z]?", question) and question not in selected_questions:
+            selected_questions.append(question)
+    help_mode = str(request.form.get("help_mode", "complete")).strip()
+    if help_mode not in {"hint", "step_by_step", "complete"}:
+        help_mode = "complete"
+    detection_id = str(request.form.get("detection_id", "")).strip()[:100]
 
     saved_files = []
     try:
@@ -625,6 +1125,10 @@ def solve_exercise():
             job_id,
             saved_files,
             instruction,
+            exercise_number,
+            selected_questions,
+            help_mode,
+            detection_id,
         )
         return jsonify({"success": True, "job_id": job_id})
     except Exception as exc:
@@ -679,6 +1183,58 @@ def exercise_chat():
     return jsonify({"success": True, "response": answer})
 
 
+@app.route("/api/exercise-feedback", methods=["POST"])
+def exercise_feedback():
+    payload = request.get_json(silent=True) or {}
+    session_key = str(payload.get("session_id", "")).strip()
+    category = str(payload.get("category", "")).strip()
+    comment = str(payload.get("comment", "")).strip()
+    allowed_categories = {
+        "mauvaise_lecture",
+        "mauvais_exercice",
+        "erreur_de_calcul",
+        "explication_incomplete",
+        "autre",
+    }
+    if not session_key:
+        return jsonify({"error": "La correction à signaler est introuvable."}), 400
+    if category not in allowed_categories:
+        return jsonify({"error": "Choisis le type de problème rencontré."}), 400
+    if len(comment) > 1000:
+        return jsonify({"error": "Le commentaire est trop long (maximum 1 000 caractères)."}), 400
+
+    with STATE_LOCK:
+        expire_old_sessions_locked()
+        session = EXERCISE_SESSIONS.get(session_key)
+        session_data = dict(session) if session else None
+        if session is not None and session.get("feedback_submitted"):
+            return jsonify({"error": "Un signalement a déjà été envoyé pour cette correction."}), 409
+        if session is not None:
+            session["feedback_submitted"] = True
+    if not session_data:
+        return jsonify({"error": "Cette correction a expiré. Renvoie l’exercice pour le signaler."}), 404
+
+    report = {
+        "id": secrets.token_urlsafe(18),
+        "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "exercise_number": session_data.get("exercise_number"),
+        "questions": session_data.get("selected_questions", []),
+        "category": category,
+        "comment": comment,
+    }
+    try:
+        save_feedback_report(report)
+    except FeedbackStorageError as exc:
+        app.logger.exception("Enregistrement d'un signalement impossible")
+        with STATE_LOCK:
+            session = EXERCISE_SESSIONS.get(session_key)
+            if session is not None:
+                session["feedback_submitted"] = False
+        return jsonify({"error": str(exc) or "Le signalement n’a pas pu être enregistré. Réessaie plus tard."}), 503
+
+    return jsonify({"success": True, "message": "Merci, ton signalement a bien été enregistré."})
+
+
 @app.route("/api/quiz", methods=["POST"])
 def quiz():
     payload = request.get_json(silent=True) or {}
@@ -719,3 +1275,5 @@ def too_large(_error):
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "5000"))
     app.run(host="0.0.0.0", port=port, debug=False)
+    
+    

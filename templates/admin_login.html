@@ -1,0 +1,22 @@
+{% extends "public_base.html" %}
+{% block title %}Espace éditeur — RéviAI{% endblock %}
+{% block extra_head %}<meta name="robots" content="noindex, nofollow, noarchive">{% endblock %}
+{% block content %}
+<section class="editorial card admin-card">
+    <a class="back" href="/">← RéviAI</a>
+    <p class="kicker editorial-kicker">ESPACE ÉDITEUR</p>
+    <h1>Signalements d’erreurs</h1>
+    {% if not configured %}
+    <p class="admin-alert admin-alert-error">L’espace éditeur n’est pas activé. Configure la variable secrète <code>ADMIN_PASSWORD</code> dans les réglages du serveur.</p>
+    {% else %}
+    <p>Connecte-toi pour consulter les retours envoyés sur les corrections d’exercices.</p>
+    {% if error %}<p class="admin-alert admin-alert-error" role="alert">{{ error }}</p>{% endif %}
+    <form class="admin-login-form" method="post" action="{{ url_for('admin_login') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label for="adminPassword">Mot de passe éditeur</label>
+        <input id="adminPassword" name="password" type="password" autocomplete="current-password" required autofocus>
+        <button class="button button-primary" type="submit">Se connecter</button>
+    </form>
+    {% endif %}
+</section>
+{% endblock %}

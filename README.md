@@ -2,6 +2,9 @@
 ## Fonctionnalités
 - Génération de fiches de révision à partir de PDF, DOCX, ODT, PPTX, TXT et photos.
 - Résolution d'exercices à partir d'une photo ou d'un document PDF, DOCX, ODT, PPTX ou TXT, avec choix du numéro et chat de suivi.
+- Repérage préalable des exercices numérotés, sélection des questions à traiter et vérification que la réponse correspond au numéro demandé.
+- Trois formes d'accompagnement pour les exercices : indice, aide pas à pas ou correction complète avec vérification.
+- Signalement volontaire des erreurs de lecture, de calcul ou d'explication pour examen par l'éditeur.
 - Quiz générés à partir du cours, avec 4 réponses, correction et nouvelles questions.
 - Limites gratuites configurables côté serveur.
 - Interface responsive.
@@ -66,6 +69,10 @@ Pour les annonces personnalisées en France et dans les autres pays concernés, 
 
 Les identifiants ne doivent jamais être ajoutés au dépôt ou codés en dur dans les pages.
 
+### Signalements d'erreurs
+
+L'espace éditeur est disponible à l'adresse `/admin`. Définis `ADMIN_PASSWORD` dans les variables d'environnement de l'hébergeur avant de l'utiliser. Pour conserver les retours après les redémarrages et mises en veille, configure `DATABASE_URL` avec l'URL de connexion d'une base PostgreSQL persistante. La configuration Render exige cette base avant d'accepter un signalement, afin de ne pas confirmer l'enregistrement de données temporaires. En développement local sans base, les signalements restent dans `data/exercise_feedback.jsonl`. Ne publie jamais l'URL de base ou le mot de passe dans GitHub.
+
 Configure `PUBLIC_BASE_URL=https://ton-domaine.fr` pour que le sitemap et `robots.txt` utilisent le domaine publié.
 
 Le site publie `/privacy`, `/terms`, `/a-propos`, `/faq`, `/guides`, `/robots.txt` et `/sitemap.xml`. Aucun nom ni adresse e-mail n'est demandé pour utiliser le site. La politique explique le traitement des fichiers et l'usage éventuel des cookies publicitaires.
@@ -80,7 +87,7 @@ Les informations bancaires ne sont nécessaires qu'au moment de configurer un mo
 `render.yaml` et `Dockerfile` permettent de déployer le site sur un hébergeur compatible Docker. Ajoute les variables d'environnement dans le tableau de bord de l'hébergeur.
 
 ## Données
-Les fichiers importés sont supprimés à la fin du traitement. Les contenus servant à la fiche, au quiz et au chat sont conservés en mémoire du serveur pendant une heure pour permettre le suivi, sans enregistrement permanent dans une base de données. La politique de confidentialité du site décrit ces durées et les fournisseurs d'IA configurés.
+Les fichiers importés sont supprimés à la fin du traitement. Les contenus servant à la fiche, au quiz et au chat sont conservés en mémoire du serveur pendant une heure pour permettre le suivi. Les signalements volontaires sont enregistrés dans la base PostgreSQL configurée ou, en développement local, dans `data/exercise_feedback.jsonl`. Ils ne sont pas associés à un compte RéviAI et peuvent être supprimés depuis l'espace éditeur. Ne publie ni le fichier local ni les secrets de connexion. La politique de confidentialité du site décrit ces traitements et les fournisseurs d'IA configurés.
 
 
 ## Images prises avec un téléphone

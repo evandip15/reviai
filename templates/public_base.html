@@ -6,6 +6,7 @@
     <meta name="description" content="{% block meta_description %}RéviAI : méthodes de révision, exercices expliqués et conseils pour apprendre.{% endblock %}">
     <meta name="theme-color" content="#5b4cf6">
     <title>{% block title %}RéviAI — Réviser et comprendre{% endblock %}</title>
+    {% block extra_head %}{% endblock %}
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     {% if show_ads and ads_enabled and ads_client_id and ads_slot_id %}
     <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ ads_client_id }}" crossorigin="anonymous"></script>

@@ -30,7 +30,7 @@
             <div>
                 <span class="pill">🧠 FICHES + EXERCICES</span>
                 <h1>Tes cours deviennent des <span>outils pour progresser</span>.</h1>
-                <p>Crée une fiche à partir de tes cours ou envoie une photo ou un document d’exercice pour obtenir une résolution expliquée.</p>
+                <p>Crée une fiche à partir de tes cours ou envoie une photo ou un document d’exercice pour choisir le bon numéro, les questions et le type d’aide.</p>
             </div>
             <div class="hero-stats">
                 <div><strong>2</strong><span>activités : fiches et exercices</span></div>
@@ -80,7 +80,7 @@
                 <div>
                     <span class="kicker">MODE EXERCICE</span>
                     <h2>Fais résoudre ton exercice</h2>
-                    <p>Envoie une photo ou un document (PDF, DOCX, ODT, PPTX, TXT) : l’IA t’expliquera la solution étape par étape.</p>
+                    <p>Envoie une photo ou un document (PDF, DOCX, ODT, PPTX, TXT), choisis l’exercice et les questions, puis demande un indice, une aide pas à pas ou une correction complète.</p>
                 </div>
                 <div class="section-number">📸</div>
             </div>
@@ -96,6 +96,38 @@
                         <div id="exerciseFileName" class="exercise-file-list"></div>
                     </div>
                 </div>
+                <button id="detectExerciseButton" class="button button-secondary exercise-detect-button" type="button" disabled>🔎 Repérer les exercices</button>
+                <section id="exerciseSelectionSection" class="exercise-selection hidden" aria-labelledby="exerciseSelectionTitle">
+                    <div>
+                        <span class="kicker">CHOIX DE L’EXERCICE</span>
+                        <h3 id="exerciseSelectionTitle">Lequel veux-tu faire ?</h3>
+                        <p id="exerciseDetectionSummary" class="field-help" role="status" aria-live="polite"></p>
+                    </div>
+                    <div id="exerciseCandidateList" class="exercise-candidates"></div>
+                    <div class="exercise-selection-fields">
+                        <div class="exercise-instruction-field">
+                            <label for="exerciseNumber">Numéro de l’exercice</label>
+                            <input id="exerciseNumber" name="exercise_number" inputmode="numeric" maxlength="3" placeholder="Ex. 63" autocomplete="off">
+                        </div>
+                        <fieldset id="exerciseQuestionField" class="exercise-question-field hidden">
+                            <legend>Questions à traiter</legend>
+                            <p class="field-help">Les questions repérées sont cochées. Décoche celles que tu ne veux pas faire.</p>
+                            <div id="exerciseQuestionChoices" class="exercise-question-choices"></div>
+                        </fieldset>
+                    </div>
+                    <div class="exercise-instruction-field">
+                        <label for="exerciseHelpMode">Quel type d’aide veux-tu ?</label>
+                        <select id="exerciseHelpMode" name="help_mode">
+                            <option value="complete">Correction complète avec vérification</option>
+                            <option value="hint">Un premier indice, sans la réponse</option>
+                            <option value="step_by_step">Aide pas à pas, sans tout révéler</option>
+                        </select>
+                    </div>
+                    <div class="exercise-instruction-field">
+                        <label for="exerciseInstruction">Matière, niveau ou précision (facultatif)</label>
+                        <textarea id="exerciseInstruction" name="instruction" rows="2" maxlength="1000" placeholder="Ex. spécialité maths, Terminale"></textarea>
+                    </div>
+                </section>
                 <div id="exerciseCropSection" class="exercise-crop-section hidden">
                     <label for="exerciseCropCanvas">Recadrage facultatif</label>
                     <p class="field-help">La photo entière sera envoyée par défaut. Le recadrage est proposé quand tu sélectionnes une seule photo.</p>
@@ -106,12 +138,7 @@
                     </div>
                     <div id="exerciseCropStatus" class="field-help" role="status" aria-live="polite">La photo complète sera utilisée. Le recadrage est facultatif.</div>
                 </div>
-                <div class="exercise-instruction-field">
-                    <label for="exerciseInstruction">Quel exercice veux-tu faire ?</label>
-                    <p class="field-help">Indique un seul numéro et, si utile, ta matière ou ton niveau. Exemple : « exercice 3 uniquement — spé maths, Terminale ».</p>
-                    <textarea id="exerciseInstruction" name="instruction" rows="2" maxlength="1000" required placeholder="Exercice demandé et niveau"></textarea>
-                </div>
-                <button id="solveExerciseButton" class="button button-primary" type="submit">✨ Résoudre mon exercice</button>
+                <button id="solveExerciseButton" class="button button-primary" type="submit" disabled>✨ Résoudre mon exercice</button>
                 <div id="exerciseStatus" class="status" role="status" aria-live="polite"></div>
             </form>
         </section>
@@ -126,6 +153,33 @@
                 <button id="copyExerciseButton" class="button button-secondary" type="button">Copier</button>
             </div>
             <article id="exerciseSolutionContent" class="revision"></article>
+            <div class="exercise-quick-help">
+                <span class="field-help">Tu veux continuer à chercher ?</span>
+                <button class="button button-secondary exercise-quick-help-button" type="button" data-chat-message="Donne-moi un seul indice supplémentaire, sans révéler la solution complète.">💡 Un indice</button>
+                <button class="button button-secondary exercise-quick-help-button" type="button" data-chat-message="Guide-moi pour la prochaine étape seulement, puis laisse-moi essayer.">🪜 Étape suivante</button>
+                <button class="button button-secondary exercise-quick-help-button" type="button" data-chat-message="Montre-moi maintenant la correction complète, avec le raisonnement et une vérification.">✅ Voir la correction</button>
+            </div>
+            <section class="exercise-feedback-section">
+                <button id="openExerciseFeedbackButton" class="button button-secondary" type="button">⚑ Signaler une erreur</button>
+                <form id="exerciseFeedbackForm" class="exercise-feedback-form hidden">
+                    <label for="exerciseFeedbackCategory">Qu’est-ce qui ne va pas ?</label>
+                    <select id="exerciseFeedbackCategory" required>
+                        <option value="">Choisis un problème</option>
+                        <option value="mauvaise_lecture">L’énoncé a été mal lu</option>
+                        <option value="mauvais_exercice">La réponse traite le mauvais exercice</option>
+                        <option value="erreur_de_calcul">Il y a une erreur de calcul ou de réponse</option>
+                        <option value="explication_incomplete">L’explication est incomplète</option>
+                        <option value="autre">Autre problème</option>
+                    </select>
+                    <label for="exerciseFeedbackComment">Précision (facultatif)</label>
+                    <textarea id="exerciseFeedbackComment" rows="3" maxlength="1000" placeholder="Explique ce qui semble incorrect. N’ajoute pas de données personnelles."></textarea>
+                    <div class="exercise-feedback-actions">
+                        <button class="button button-primary" type="submit">Envoyer le signalement</button>
+                        <button id="cancelExerciseFeedbackButton" class="button button-secondary" type="button">Annuler</button>
+                    </div>
+                    <div id="exerciseFeedbackStatus" class="status" role="status" aria-live="polite"></div>
+                </form>
+            </section>
             <div class="exercise-chat">
                 <div class="exercise-chat-heading">
                     <span class="kicker">CONTINUER LA CONVERSATION</span>

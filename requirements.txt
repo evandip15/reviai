@@ -7,3 +7,4 @@ python-pptx>=1.0,<2
 Pillow>=11,<12
 pytesseract>=0.3.13,<1
 gunicorn>=23,<24
+psycopg[binary]>=3.2,<4

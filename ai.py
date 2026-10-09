@@ -39,11 +39,13 @@ Retourne uniquement la fiche finale.
 
 
 EXERCISE_TEXT_PROMPT = """
+MODE DE RÉPONSE : si la consigne demande un indice ou une aide pas à pas, elle prime sur les règles de correction complète plus bas. Garde d'abord l'en-tête exact de l'exercice choisi. Pour un indice, ajoute seulement le titre « ## Indice » et un seul indice. Pour l'aide pas à pas, ajoute seulement le titre « ## Étape suivante », donne la prochaine étape puis invite l'élève à continuer.
+Le numéro et la sélection exacte des sous-questions transmis par l'élève priment sur les règles générales ci-dessous.
 Tu es le tuteur pédagogique de RéviAI. Résous l'exercice fourni en français.
 
 Consignes :
 - Résous EXCLUSIVEMENT l'exercice désigné par l'élève. Ne donne aucune solution, réponse ou remarque sur les exercices voisins.
-- Résous toutes les sous-questions de l'exercice choisi, mais aucune partie appartenant à un autre exercice.
+- Résous les sous-questions demandées par l'élève (toutes si aucune sélection n'est précisée), mais aucune partie appartenant à un autre exercice.
 - Garde l'ordre et le numéro de chaque sous-question. Réponds à chacune une seule fois, sans répéter la résolution.
 - Commence par indiquer le numéro ou le titre de l'exercice choisi et reformule uniquement son énoncé.
 - Si tu ne peux pas distinguer avec certitude le bon exercice dans le texte OCR, ne résous rien : demande une photo recadrée ou une précision.
@@ -65,12 +67,14 @@ Retourne uniquement la résolution.
 
 
 EXERCISE_IMAGE_PROMPT = """
+MODE DE RÉPONSE : si la consigne demande un indice ou une aide pas à pas, elle prime sur les règles de correction complète plus bas. Garde d'abord l'en-tête exact de l'exercice choisi. Pour un indice, ajoute seulement le titre « ## Indice » et un seul indice. Pour l'aide pas à pas, ajoute seulement le titre « ## Étape suivante », donne la prochaine étape puis invite l'élève à continuer.
+Le numéro et la sélection exacte des sous-questions transmis par l'élève priment sur les règles générales ci-dessous.
 Tu es le tuteur pédagogique de RéviAI. Lis l'exercice visible sur les images jointes et résous-le en français.
 
 Consignes :
 - Si plusieurs images sont jointes, lis-les ensemble dans l'ordre d'envoi : elles peuvent montrer les pages successives du même exercice.
 - Résous EXCLUSIVEMENT l'exercice désigné par l'élève. Ne donne aucune solution, réponse ou remarque sur les exercices voisins.
-- Résous toutes les sous-questions de l'exercice choisi, mais aucune partie appartenant à un autre exercice.
+- Résous les sous-questions demandées par l'élève (toutes si aucune sélection n'est précisée), mais aucune partie appartenant à un autre exercice.
 - Garde l'ordre et le numéro de chaque sous-question. Réponds à chacune une seule fois, sans répéter la résolution.
 - Commence par indiquer le numéro ou le titre de l'exercice choisi et retranscris uniquement son énoncé.
 - Si tu ne peux pas distinguer avec certitude le bon exercice sur la photo, ne résous rien : demande une photo recadrée ou une précision.
@@ -299,17 +303,75 @@ def _add_exercise_instruction(prompt, instruction):
     )
 
 
-def solve_exercise_text(exercise_text, instruction=""):
+def _exercise_request_instruction(
+    instruction="",
+    exercise_number=None,
+    selected_questions=None,
+    help_mode="complete",
+):
+    parts = []
+    if exercise_number is not None:
+        parts.append(
+            f"L'élève a choisi exclusivement l'exercice {exercise_number}. "
+            f"Commence par l'en-tête exact « # Exercice {exercise_number} ». "
+            "N'en traite aucun autre, même s'il est visible dans la source."
+        )
+    questions = [str(item).strip() for item in (selected_questions or []) if str(item).strip()]
+    if questions:
+        parts.append(
+            "Traite uniquement les sous-questions suivantes : "
+            + ", ".join(questions)
+            + ". N'ajoute aucune autre sous-question."
+        )
+    else:
+        parts.append("Traite toutes les sous-questions de l'exercice choisi, une seule fois chacune.")
+
+    if help_mode == "hint":
+        parts.append(
+            "Mode indice : donne seulement un premier indice utile, sans calculer la réponse finale "
+            "ni révéler toute la méthode. Garde l'en-tête exact de l'exercice, puis réponds avec le titre « ## Indice » et termine en invitant l'élève à essayer. "
+            "Cette consigne remplace le format de correction complète demandé ailleurs."
+        )
+    elif help_mode == "step_by_step":
+        parts.append(
+            "Mode pas à pas : guide l'élève avec une étape à la fois, explique la prochaine action "
+            "et laisse-lui une courte question pour qu'il poursuive. Garde l'en-tête exact de l'exercice, puis réponds sous le titre « ## Étape suivante ». "
+            "Ne donne pas toute la correction; cette consigne remplace le format de correction complète demandé ailleurs."
+        )
+    else:
+        parts.append(
+            "Mode correction complète : explique la méthode, détaille les calculs, vérifie le résultat "
+            "et termine par une réponse claire."
+        )
+
+    extra = str(instruction or "").strip()
+    if extra:
+        parts.append("Matière, niveau ou précision de l'élève : " + extra)
+    return "\n".join(parts)
+
+
+def solve_exercise_text(
+    exercise_text,
+    instruction="",
+    *,
+    exercise_number=None,
+    selected_questions=None,
+    help_mode="complete",
+):
     exercise_text = str(exercise_text or "").strip()
     if not exercise_text:
         raise RuntimeError("Aucun énoncé lisible n'a été trouvé dans la photo.")
-    cube_solution = _solve_cube_vector_exercise(exercise_text, instruction)
-    if cube_solution:
-        return cube_solution
+    task_instruction = _exercise_request_instruction(
+        instruction, exercise_number, selected_questions, help_mode
+    )
+    if help_mode == "complete" and not selected_questions:
+        cube_solution = _solve_cube_vector_exercise(exercise_text, task_instruction)
+        if cube_solution:
+            return cube_solution
     answer = generate_text(
         _add_exercise_instruction(
             EXERCISE_TEXT_PROMPT + "\n\nÉNONCÉ DE L'EXERCICE :\n\n" + exercise_text,
-            instruction,
+            task_instruction,
         ),
         temperature=0,
         num_predict=5000,
@@ -447,7 +509,15 @@ def _keep_first_exercise_answer(answer):
     return text
 
 
-def solve_exercise_images(images, instruction=""):
+def solve_exercise_images(
+    images,
+    instruction="",
+    *,
+    exercise_number=None,
+    selected_questions=None,
+    help_mode="complete",
+    selected_statement="",
+):
     """Résout un exercice montré sur une ou plusieurs images ordonnées."""
     key = os.getenv("GEMINI_API_KEY", "").strip()
     if not key:
@@ -472,9 +542,21 @@ def solve_exercise_images(images, instruction=""):
                     ".webp": "image/webp",
                 }.get(Path(image_path).suffix.lower(), "image/jpeg")
             parts.append(_gemini_file_part(image_path, mime_type))
+        task_instruction = _exercise_request_instruction(
+            instruction, exercise_number, selected_questions, help_mode
+        )
+        prompt = _add_exercise_instruction(EXERCISE_IMAGE_PROMPT, task_instruction)
+        if selected_statement:
+            prompt += (
+                "\n\nÉNONCÉ TRANSCRIT ET SÉLECTIONNÉ PAR L'ÉLÈVE :\n"
+                "Utilise cet énoncé comme référence pour identifier précisément l'exercice et ses questions. "
+                "Les photos peuvent contenir des exercices voisins : ignore-les. Les photos servent aussi "
+                "à lire les schémas et les données visuelles.\n\n"
+                + str(selected_statement)[:12000]
+            )
         response = client.models.generate_content(
             model=GEMINI_MODEL,
-            contents=[_add_exercise_instruction(EXERCISE_IMAGE_PROMPT, instruction), *parts],
+            contents=[prompt, *parts],
             config=_gemini_config(max_output_tokens=6000, temperature=0),
         )
     except Exception as exc:
@@ -500,6 +582,7 @@ def chat_about_exercise(context, initial_solution, history, message, instruction
     ) or "Aucun échange précédent."
 
     prompt = f"""
+Si l'élève demande un indice, ne révèle pas la solution complète. S'il demande l'étape suivante, donne uniquement la prochaine étape puis laisse-lui essayer.
 Tu es le tuteur pédagogique de RéviAI. Continue la conversation en français.
 - Réponds précisément à la dernière demande de l'élève.
 - Ne traite qu'un seul exercice par réponse. Si un numéro est demandé, ne résous pas les exercices voisins.
