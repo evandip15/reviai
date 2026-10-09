@@ -1,0 +1,26 @@
+{% extends "public_base.html" %}
+{% block title %}RéviAI Plus — Fiches et exercices sans limite{% endblock %}
+{% block meta_description %}Passe à RéviAI Plus pour 1,99 € par mois : utilise les fiches, exercices, quiz et le chat sans limite quotidienne. Résilie quand tu le souhaites.{% endblock %}
+{% block content %}
+<article class="editorial card plus-page">
+    <a class="back" href="/">← RéviAI</a>
+    <p class="kicker editorial-kicker">POUR RÉVISER À TON RYTHME</p>
+    <h1>RéviAI Plus</h1>
+    <p class="editorial-intro">Tous les outils de révision, sans limite quotidienne.</p>
+    <div class="plus-price-card">
+        <div><span class="plus-price">1,99 €</span><span class="plus-period"> / mois</span></div>
+        <p>Abonnement mensuel, renouvelé chaque mois. Résiliation possible à tout moment depuis ton compte.</p>
+        {% if admin_signed_in %}<a class="button button-primary" href="/admin/signalements">Accès éditeur illimité</a>
+        {% elif user_has_plus %}<a class="button button-primary" href="/compte">Gérer mon compte Plus</a>
+        {% elif billing_ready %}
+            {% if account_signed_in %}<a class="button button-primary" href="/compte">Voir mon compte et m’abonner</a>{% else %}<a class="button button-primary" href="/inscription">Créer mon compte</a><a class="plus-login-link" href="/connexion">J’ai déjà un compte</a>{% endif %}
+        {% else %}
+            <p class="admin-alert admin-alert-warning" role="status">Le paiement n’est pas encore activé. L’abonnement sera disponible après la configuration des services de paiement et d’e-mail par l’éditeur.</p>
+        {% endif %}
+    </div>
+    {% if request.args.get('status') == 'unavailable' %}<p class="admin-alert admin-alert-warning">Le paiement n’est pas encore prêt. Réessaie plus tard.</p>{% elif request.args.get('status') == 'payment_error' %}<p class="admin-alert admin-alert-error">Le paiement n’a pas pu être préparé. Réessaie plus tard.</p>{% endif %}
+    <section class="editorial-section"><h2>Ce qui est inclus</h2><ul><li>Génération de fiches de révision</li><li>Repérage et correction d’exercices</li><li>Messages de suivi avec l’IA</li><li>Création de quiz</li><li>La bibliothèque reste gratuite et disponible sans abonnement</li></ul></section>
+    <section class="editorial-section"><h2>Résiliation claire</h2><p>Tu peux demander la résiliation depuis ton compte quand tu le souhaites. Elle prend effet à la fin de la période déjà payée : aucun nouveau prélèvement mensuel ne sera lancé ensuite, et Plus reste actif jusqu’à cette date.</p></section>
+    <p class="field-help">Le paiement est traité par Stripe. RéviAI ne stocke pas les coordonnées de ta carte. Consulte les <a href="/terms">conditions d’utilisation</a> et la <a href="/privacy">politique de confidentialité</a>.</p>
+</article>
+{% endblock %}

@@ -9,10 +9,13 @@
             <h1>Signalements d’erreurs</h1>
             <p>{{ reports|length }} signalement{% if reports|length != 1 %}s{% endif %} récent{% if reports|length != 1 %}s{% endif %}</p>
         </div>
-        <form method="post" action="{{ url_for('admin_logout') }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <button class="button button-secondary" type="submit">Se déconnecter</button>
-        </form>
+        <div class="section-actions">
+            <a class="button button-secondary" href="{{ url_for('admin_analytics') }}">Statistiques</a>
+            <form method="post" action="{{ url_for('admin_logout') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button class="button button-secondary" type="submit">Se déconnecter</button>
+            </form>
+        </div>
     </div>
 
     {% if not persistent_storage %}

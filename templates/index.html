@@ -20,7 +20,9 @@
             </a>
             <div class="top-actions">
                 <a href="/guides" class="nav-link">Guides</a>
+                <button id="libraryToggleButton" class="nav-button" type="button" aria-expanded="false">📚 Ma bibliothèque</button>
                 <a href="/a-propos" class="nav-link">À propos</a>
+                {% if admin_signed_in %}<a href="/admin/signalements" class="nav-link">Espace éditeur · accès illimité</a>{% elif account_signed_in %}<a href="/compte" class="nav-link">Mon compte</a>{% else %}<a href="/connexion" class="nav-link">Connexion</a><a href="/plus" class="nav-link nav-plus-link">Plus · 1,99 €/mois</a>{% endif %}
             </div>
         </div>
     </header>
@@ -33,10 +35,35 @@
                 <p>Crée une fiche à partir de tes cours ou envoie une photo ou un document d’exercice pour choisir le bon numéro, les questions et le type d’aide.</p>
             </div>
             <div class="hero-stats">
-                <div><strong>2</strong><span>activités : fiches et exercices</span></div>
+                <div><strong>3</strong><span>outils : fiches, quiz, exercices</span></div>
                 <div><strong>10</strong><span>questions par quiz</span></div>
                 <div><strong>📎</strong><span>photo ou document d’exercice</span></div>
             </div>
+        </section>
+
+        {% if admin_signed_in %}
+        <a class="plus-banner" href="/admin/signalements"><span><strong>Accès éditeur illimité</strong><small>Tous les outils sont disponibles sans limite quotidienne.</small></span><span class="plus-banner-price">Espace éditeur <b>Ouvrir →</b></span></a>
+        {% elif user_has_plus %}
+        <a class="plus-banner" href="/compte"><span><strong>RéviAI Plus est actif</strong><small>Tous les outils sont disponibles sans limite quotidienne.</small></span><span class="plus-banner-price">Mon compte <b>Gérer →</b></span></a>
+        {% else %}
+        <a class="plus-banner" href="/plus"><span><strong>RéviAI Plus</strong><small>Fiches, exercices, quiz et chat sans limite quotidienne.</small></span><span class="plus-banner-price">1,99 € / mois <b>Découvrir →</b></span></a>
+        {% endif %}
+
+        <section id="libraryPanel" class="card library-panel hidden" aria-labelledby="libraryTitle">
+            <div class="library-heading">
+                <div>
+                    <span class="kicker">TON ESPACE DE RÉVISION</span>
+                    <h2 id="libraryTitle">Ma bibliothèque</h2>
+                    <p>Retrouve tes fiches, tes exercices et tes résultats de quiz. Cette bibliothèque reste sur cet appareil et dans ce navigateur.</p>
+                </div>
+                <button id="clearLibraryButton" class="button button-secondary" type="button">Effacer ma bibliothèque</button>
+            </div>
+            <div class="library-stats">
+                <div><strong id="libraryItemCount">0</strong><span>élément(s) enregistré(s)</span></div>
+                <div><strong id="libraryQuizAverage">—</strong><span>moyenne des quiz enregistrés</span></div>
+            </div>
+            <p id="libraryEmptyState" class="library-empty">Tu n’as encore rien enregistré. Utilise « Enregistrer » après une fiche ou un exercice.</p>
+            <div id="libraryList" class="library-list"></div>
         </section>
 
         <nav class="mode-switcher" aria-label="Choisir une activité">
@@ -49,6 +76,7 @@
                 <span><strong>Résoudre un exercice</strong><small>Envoie une photo ou un document</small></span>
             </button>
         </nav>
+        <p id="usageSummary" class="usage-summary" role="status" aria-live="polite">Chargement de tes limites gratuites du jour…</p>
 
         <section id="revisionFormCard" class="card main-card">
             <div class="section-head">
@@ -150,9 +178,13 @@
                     <h2>La solution expliquée</h2>
                     <p>Relis les étapes et vérifie comment le résultat a été obtenu.</p>
                 </div>
-                <button id="copyExerciseButton" class="button button-secondary" type="button">Copier</button>
+                <div class="section-actions">
+                    <button id="saveExerciseButton" class="button button-secondary" type="button">＋ Enregistrer</button>
+                    <button id="copyExerciseButton" class="button button-secondary" type="button">Copier</button>
+                </div>
             </div>
             <article id="exerciseSolutionContent" class="revision"></article>
+            <p id="savedExerciseNotice" class="saved-exercise-notice hidden">Correction enregistrée sur cet appareil. La conversation avec l’IA est temporaire : renvoie l’exercice pour poser une nouvelle question.</p>
             <div class="exercise-quick-help">
                 <span class="field-help">Tu veux continuer à chercher ?</span>
                 <button class="button button-secondary exercise-quick-help-button" type="button" data-chat-message="Donne-moi un seul indice supplémentaire, sans révéler la solution complète.">💡 Un indice</button>
@@ -203,7 +235,10 @@
                     <h2>Ta fiche de révision</h2>
                     <p>Structure claire, informations importantes et mise en forme.</p>
                 </div>
-                <button id="copyButton" class="button button-secondary" type="button">Copier</button>
+                <div class="section-actions">
+                    <button id="saveRevisionButton" class="button button-secondary" type="button">＋ Enregistrer</button>
+                    <button id="copyButton" class="button button-secondary" type="button">Copier</button>
+                </div>
             </div>
             <article id="resultContent" class="revision"></article>
 
@@ -255,6 +290,9 @@
             <div class="resource-links">
                 <a href="/guides/reviser-efficacement">Réviser efficacement <span>→</span></a>
                 <a href="/guides/resoudre-exercice">Bien envoyer un exercice <span>→</span></a>
+                <a href="/guides/reussir-un-quiz">Apprendre avec les quiz <span>→</span></a>
+                <a href="/guides/organiser-ses-revisions">Organiser ses révisions <span>→</span></a>
+                <a href="/guides/reviser-les-sciences">Réviser les sciences <span>→</span></a>
             </div>
         </section>
 

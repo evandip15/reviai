@@ -1,0 +1,44 @@
+{% extends "public_base.html" %}
+{% block title %}{% if mode == 'register' %}Créer un compte{% elif mode == 'login' %}Connexion{% elif mode == 'forgot' %}Mot de passe oublié{% else %}Nouveau mot de passe{% endif %} — RéviAI{% endblock %}
+{% block extra_head %}<meta name="robots" content="noindex, nofollow, noarchive">{% endblock %}
+{% block content %}
+<section class="editorial card account-card">
+    <a class="back" href="/plus">← RéviAI Plus</a>
+    <p class="kicker editorial-kicker">ESPACE PERSONNEL</p>
+    {% if mode == 'register' %}<h1>Créer un compte</h1><p>Ton adresse e-mail sert à confirmer ton compte et à t’envoyer les informations de facturation.</p>
+    {% elif mode == 'login' %}<h1>Se connecter</h1><p>Retrouve ton abonnement et gère tes paiements.</p>
+    {% elif mode == 'forgot' %}<h1>Mot de passe oublié ?</h1><p>Nous t’enverrons un lien pour choisir un nouveau mot de passe.</p>
+    {% else %}<h1>Choisir un nouveau mot de passe</h1><p>Le nouveau mot de passe doit contenir au moins 10 caractères.</p>{% endif %}
+    {% if error %}<p class="admin-alert admin-alert-error" role="alert">{{ error }}</p>{% endif %}
+    {% if success %}<p class="admin-alert admin-alert-success" role="status">{{ success }}</p>{% endif %}
+    {% if mode == 'register' and not billing_ready %}<p class="admin-alert admin-alert-warning">La création de comptes sera ouverte lorsque le paiement et l’envoi d’e-mails seront configurés.</p>{% endif %}
+
+    {% if mode == 'register' %}
+    <form class="admin-login-form" method="post" action="/inscription">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label for="accountEmail">Adresse e-mail</label><input id="accountEmail" name="email" type="email" autocomplete="email" maxlength="254" required>
+        <label for="accountPassword">Mot de passe</label><input id="accountPassword" name="password" type="password" autocomplete="new-password" minlength="10" maxlength="128" required>
+        <label for="accountPasswordConfirm">Confirmer le mot de passe</label><input id="accountPasswordConfirm" name="password_confirmation" type="password" autocomplete="new-password" minlength="10" maxlength="128" required>
+        <div class="account-consent"><input id="acceptTerms" type="checkbox" name="accept_terms" required><span>J’accepte les <a href="/terms" target="_blank" rel="noopener">conditions d’utilisation</a> et j’ai lu la <a href="/privacy" target="_blank" rel="noopener">politique de confidentialité</a>.</span></div>
+        <button class="button button-primary" type="submit" {% if not billing_ready %}disabled{% endif %}>Créer mon compte</button>
+    </form>
+    <p class="account-switch">Tu as déjà un compte ? <a href="/connexion">Se connecter</a>.</p>
+    {% elif mode == 'login' %}
+    <form class="admin-login-form" method="post" action="/connexion">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label for="accountEmail">Adresse e-mail</label><input id="accountEmail" name="email" type="email" autocomplete="email" maxlength="254" required>
+        <label for="accountPassword">Mot de passe</label><input id="accountPassword" name="password" type="password" autocomplete="current-password" required>
+        <button class="button button-primary" type="submit">Se connecter</button>
+    </form>
+    <p class="account-switch"><a href="/mot-de-passe-oublie">Mot de passe oublié ?</a></p>
+    <form class="resend-verification-form" method="post" action="/compte/verifier/renvoyer"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><label for="resendEmail">Pas reçu le lien de confirmation ?</label><div><input id="resendEmail" name="email" type="email" autocomplete="email" placeholder="Ton adresse e-mail" required><button class="button button-secondary" type="submit">Renvoyer le lien</button></div></form>
+    <p class="account-switch">Nouveau sur RéviAI ? <a href="/inscription">Créer un compte</a>.</p>
+    {% elif mode == 'forgot' %}
+    <form class="admin-login-form" method="post" action="/mot-de-passe-oublie"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><label for="accountEmail">Adresse e-mail</label><input id="accountEmail" name="email" type="email" autocomplete="email" maxlength="254" required><button class="button button-primary" type="submit">Envoyer le lien</button></form>
+    <p class="account-switch"><a href="/connexion">Retour à la connexion</a></p>
+    {% else %}
+    {% if reset_token %}<form class="admin-login-form" method="post" action="/mot-de-passe-reinitialiser"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="token" value="{{ reset_token }}"><label for="accountPassword">Nouveau mot de passe</label><input id="accountPassword" name="password" type="password" autocomplete="new-password" minlength="10" maxlength="128" required><label for="accountPasswordConfirm">Confirmer le nouveau mot de passe</label><input id="accountPasswordConfirm" name="password_confirmation" type="password" autocomplete="new-password" minlength="10" maxlength="128" required><button class="button button-primary" type="submit">Modifier le mot de passe</button></form>{% endif %}
+    <p class="account-switch"><a href="/connexion">Retour à la connexion</a></p>
+    {% endif %}
+</section>
+{% endblock %}

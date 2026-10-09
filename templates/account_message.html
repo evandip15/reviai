@@ -1,0 +1,13 @@
+{% extends "public_base.html" %}
+{% block title %}{{ title }} — RéviAI{% endblock %}
+{% block extra_head %}<meta name="robots" content="noindex, nofollow, noarchive">{% endblock %}
+{% block content %}
+<section class="editorial card account-card">
+    <a class="back" href="/">← RéviAI</a>
+    <p class="kicker editorial-kicker">ESPACE PERSONNEL</p>
+    <h1>{{ title }}</h1>
+    <p>{{ message }}</p>
+    {% if resend %}<form class="resend-verification-form" method="post" action="/compte/verifier/renvoyer"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><label for="resendEmail">Adresse e-mail du compte</label><div><input id="resendEmail" name="email" type="email" autocomplete="email" required><button class="button button-secondary" type="submit">Renvoyer le lien</button></div></form>{% endif %}
+    <a class="button button-primary account-message-link" href="/connexion">Aller à la connexion</a>
+</section>
+{% endblock %}

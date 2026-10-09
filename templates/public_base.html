@@ -24,6 +24,7 @@
                 <a href="/guides">Guides</a>
                 <a href="/faq">FAQ</a>
                 <a href="/a-propos">À propos</a>
+                {% if admin_signed_in %}<a href="/admin/signalements">Espace éditeur · accès illimité</a>{% elif account_signed_in %}<a href="/compte">Mon compte</a>{% else %}<a href="/connexion">Connexion</a><a class="nav-plus-link" href="/plus">Plus · 1,99 €/mois</a>{% endif %}
             </nav>
         </div>
     </header>

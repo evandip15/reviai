@@ -1,0 +1,47 @@
+{% extends "public_base.html" %}
+{% block title %}Statistiques d’utilisation — Espace éditeur RéviAI{% endblock %}
+{% block extra_head %}<meta name="robots" content="noindex, nofollow, noarchive">{% endblock %}
+{% block content %}
+<section class="editorial card admin-card">
+    <div class="admin-heading">
+        <div>
+            <p class="kicker editorial-kicker">ESPACE ÉDITEUR</p>
+            <h1>Utilisation de RéviAI</h1>
+            <p>Activités des 30 derniers jours, regroupées par jour et par fonction.</p>
+        </div>
+        <div class="section-actions">
+            <a class="button button-secondary" href="{{ url_for('admin_feedback') }}">Signalements</a>
+            <form method="post" action="{{ url_for('admin_logout') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button class="button button-secondary" type="submit">Se déconnecter</button>
+            </form>
+        </div>
+    </div>
+
+    {% if metrics_error %}<p class="admin-alert admin-alert-warning">{{ metrics_error }}</p>{% endif %}
+    {% if metrics %}
+    <div class="admin-usage-table-wrap">
+        <table class="admin-usage-table">
+            <thead><tr><th>Date</th><th>Fonction</th><th>Utilisations</th><th>Navigateur(s) actif(s)</th></tr></thead>
+            <tbody>
+                {% for row in metrics %}
+                <tr>
+                    <td>{{ row.date }}</td>
+                    <td>{% if row.feature == "revision" %}Fiches{% elif row.feature == "detection" %}Repérages d’exercices{% elif row.feature == "exercise" %}Corrections d’exercices{% elif row.feature == "chat" %}Messages de suivi{% else %}Quiz{% endif %}</td>
+                    <td>{{ row.uses }}</td>
+                    <td>{{ row.browsers }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% elif not metrics_error %}
+    <div class="admin-empty-state">
+        <span aria-hidden="true">↗</span>
+        <h2>Aucune utilisation enregistrée pour l’instant</h2>
+        <p>Les nombres apparaîtront quand les élèves utiliseront les fiches, les exercices, le chat ou les quiz.</p>
+    </div>
+    {% endif %}
+    <p class="admin-usage-note">Ces statistiques ne contiennent ni nom, ni adresse e-mail, ni adresse IP. Les compteurs sont supprimés après 90 jours.</p>
+</section>
+{% endblock %}

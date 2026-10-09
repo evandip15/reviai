@@ -7,6 +7,15 @@ const statusBox = document.getElementById("status");
 const resultCard = document.getElementById("resultCard");
 const resultContent = document.getElementById("resultContent");
 const copyButton = document.getElementById("copyButton");
+const saveRevisionButton = document.getElementById("saveRevisionButton");
+const libraryToggleButton = document.getElementById("libraryToggleButton");
+const libraryPanel = document.getElementById("libraryPanel");
+const libraryList = document.getElementById("libraryList");
+const libraryEmptyState = document.getElementById("libraryEmptyState");
+const libraryItemCount = document.getElementById("libraryItemCount");
+const libraryQuizAverage = document.getElementById("libraryQuizAverage");
+const clearLibraryButton = document.getElementById("clearLibraryButton");
+const usageSummary = document.getElementById("usageSummary");
 
 const dropZone = document.getElementById("dropZone");
 const revisionModeButton = document.getElementById("revisionModeButton");
@@ -36,7 +45,12 @@ const solveExerciseButton = document.getElementById("solveExerciseButton");
 const exerciseStatusBox = document.getElementById("exerciseStatus");
 const exerciseResultCard = document.getElementById("exerciseResultCard");
 const exerciseSolutionContent = document.getElementById("exerciseSolutionContent");
+const savedExerciseNotice = document.getElementById("savedExerciseNotice");
+const exerciseQuickHelp = document.querySelector(".exercise-quick-help");
+const exerciseFeedbackSection = document.querySelector(".exercise-feedback-section");
+const exerciseChatSection = document.querySelector(".exercise-chat");
 const copyExerciseButton = document.getElementById("copyExerciseButton");
+const saveExerciseButton = document.getElementById("saveExerciseButton");
 const exerciseChatForm = document.getElementById("exerciseChatForm");
 const exerciseChatInput = document.getElementById("exerciseChatInput");
 const exerciseChatMessages = document.getElementById("exerciseChatMessages");
@@ -67,6 +81,14 @@ const backToRevisionButton = document.getElementById("backToRevisionButton");
 
 let selectedFiles = [];
 let sessionId = "";
+let currentRevisionTitle = "Fiche de révision";
+let currentRevisionLibraryId = "";
+let currentRevisionText = "";
+let currentExerciseTitle = "Exercice expliqué";
+let currentExerciseLibraryId = "";
+let currentExerciseText = "";
+let quizSavedForRun = false;
+const LIBRARY_STORAGE_KEY = "reviai-library-v1";
 
 let quizQuestions = [];
 let quizIndex = 0;
@@ -261,6 +283,232 @@ function markdownToHtml(markdown) {
 
     return out.join("");
 }
+
+
+/* =========================
+   BIBLIOTHÈQUE LOCALE
+========================= */
+
+function readLibrary() {
+    try {
+        const value = JSON.parse(localStorage.getItem(LIBRARY_STORAGE_KEY) || "[]");
+        return Array.isArray(value) ? value.filter(item => item && typeof item === "object") : [];
+    } catch (error) {
+        console.warn("Bibliothèque locale indisponible", error);
+        return [];
+    }
+}
+
+function renderLibrary() {
+    const items = readLibrary().sort((left, right) =>
+        String(right.updatedAt || right.createdAt || "").localeCompare(String(left.updatedAt || left.createdAt || ""))
+    );
+    libraryList.replaceChildren();
+    libraryItemCount.textContent = String(items.length);
+    libraryEmptyState.classList.toggle("hidden", items.length > 0);
+
+    const quizResults = items.filter(item => item.type === "quiz" && Number(item.total) > 0);
+    if (quizResults.length) {
+        const average = quizResults.reduce((sum, item) => sum + Number(item.score || 0) / Number(item.total), 0) / quizResults.length;
+        libraryQuizAverage.textContent = `${Math.round(average * 100)} %`;
+    } else {
+        libraryQuizAverage.textContent = "—";
+    }
+
+    for (const item of items) {
+        const card = document.createElement("article");
+        card.className = "library-item";
+
+        const top = document.createElement("div");
+        top.className = "library-item-top";
+        const title = document.createElement("h3");
+        title.textContent = String(item.title || "Révision");
+        const type = document.createElement("span");
+        type.className = "library-type";
+        type.textContent = item.type === "exercise" ? "Exercice" : item.type === "quiz" ? "Quiz" : "Fiche";
+        top.append(type, title);
+        card.appendChild(top);
+
+        const date = document.createElement("time");
+        date.className = "library-date";
+        const timestamp = Date.parse(item.updatedAt || item.createdAt || "");
+        date.textContent = Number.isNaN(timestamp) ? "Date inconnue" : new Date(timestamp).toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short" });
+        card.appendChild(date);
+
+        const preview = document.createElement("p");
+        preview.className = "library-preview";
+        preview.textContent = item.type === "quiz"
+            ? `Résultat : ${Number(item.score || 0)} / ${Number(item.total || 0)}`
+            : libraryTextPreview(item.content).slice(0, 240);
+        card.appendChild(preview);
+
+        const actions = document.createElement("div");
+        actions.className = "library-item-actions";
+        if (item.type !== "quiz") {
+            const open = document.createElement("button");
+            open.type = "button";
+            open.className = "button button-secondary";
+            open.dataset.libraryAction = "open";
+            open.dataset.libraryId = String(item.id || "");
+            open.textContent = "Ouvrir";
+            actions.appendChild(open);
+        }
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "button button-secondary library-delete";
+        remove.dataset.libraryAction = "delete";
+        remove.dataset.libraryId = String(item.id || "");
+        remove.textContent = "Supprimer";
+        actions.appendChild(remove);
+        card.appendChild(actions);
+        libraryList.appendChild(card);
+    }
+}
+
+function saveLibraryItem(type, title, content, id, score = null, total = null) {
+    const items = readLibrary();
+    const itemId = id || `item-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    const previous = items.find(item => item.id === itemId);
+    const item = {
+        id: itemId,
+        type,
+        title: String(title || "Révision").slice(0, 180),
+        content: String(content || "").slice(0, 30000),
+        score,
+        total,
+        createdAt: previous ? previous.createdAt : new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+    };
+    const next = [item, ...items.filter(existing => existing.id !== itemId)].slice(0, 40);
+    try {
+        localStorage.setItem(LIBRARY_STORAGE_KEY, JSON.stringify(next));
+        renderLibrary();
+        return true;
+    } catch (error) {
+        console.warn("Enregistrement local impossible", error);
+        alert("La bibliothèque de ce navigateur est pleine. Supprime quelques anciens éléments puis réessaie.");
+        return false;
+    }
+}
+
+function libraryTextPreview(text) {
+    return String(text || "")
+        .replace(/\$/g, "")
+        .replace(/\\text\{([^{}]*)\}/g, "$1")
+        .replace(/\\(?:vec|overrightarrow)\s*\{([^{}]+)\}/g, "vecteur $1")
+        .replace(/\\vec([A-Za-z]{1,3})/g, "vecteur $1")
+        .replace(/\\rightarrow|\\longrightarrow|\\to/g, "→")
+        .replace(/\\implies|\\Rightarrow/g, "⇒")
+        .replace(/_\{?([^{}\s]+)\}?/g, "$1")
+        .replace(/\^\{?([^{}\s]+)\}?/g, "$1");
+}
+
+function openLibraryItem(item) {
+    libraryPanel.classList.add("hidden");
+    libraryToggleButton.setAttribute("aria-expanded", "false");
+    if (item.type === "exercise") {
+        currentExerciseTitle = String(item.title || "Exercice expliqué");
+        currentExerciseLibraryId = String(item.id || "");
+        currentExerciseText = String(item.content || "");
+        exerciseSessionId = "";
+        exerciseChatMessages.replaceChildren();
+        exerciseQuickHelp.classList.add("hidden");
+        exerciseFeedbackSection.classList.add("hidden");
+        exerciseChatSection.classList.add("hidden");
+        savedExerciseNotice.classList.remove("hidden");
+        saveExerciseButton.textContent = "＋ Enregistrer";
+        exerciseSolutionContent.innerHTML = markdownToHtml(item.content || "");
+        exerciseResultCard.classList.remove("hidden");
+        exerciseResultCard.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+        sessionId = "";
+        currentRevisionText = String(item.content || "");
+        currentRevisionTitle = String(item.title || "Fiche de révision");
+        currentRevisionLibraryId = String(item.id || "");
+        quizButton.disabled = !currentRevisionText.trim();
+        saveRevisionButton.textContent = "＋ Enregistrer";
+        resultContent.innerHTML = markdownToHtml(item.content || "");
+        resultCard.classList.remove("hidden");
+        resultCard.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+}
+
+async function refreshUsageSummary() {
+    try {
+        const response = await fetch("/api/usage", { cache: "no-store" });
+        if (!response.ok) throw new Error("Compteurs indisponibles");
+        const result = await response.json();
+        if (result.unlimited) {
+            usageSummary.textContent = result.plan === "éditeur"
+                ? "Accès éditeur : tous les outils sont disponibles sans limite quotidienne."
+                : "RéviAI Plus est actif : tous les outils sont disponibles sans limite quotidienne.";
+            return;
+        }
+        const limits = result.limits || {};
+        const labels = [
+            ["revision", "fiches"],
+            ["detection", "repérages"],
+            ["exercise", "exercices"],
+            ["chat", "messages de suivi"],
+            ["quiz", "quiz"],
+        ];
+        usageSummary.textContent = `Aujourd’hui, il te reste ${labels.map(([key, label]) => {
+            const item = limits[key] || {};
+            return item.limit === null ? `${label} : sans limite` : `${item.remaining ?? 0} ${label}`;
+        }).join(" · ")} sur ce navigateur.`;
+    } catch (error) {
+        usageSummary.textContent = "Limites gratuites réinitialisées chaque jour.";
+    }
+}
+
+libraryToggleButton.addEventListener("click", () => {
+    const opening = libraryPanel.classList.contains("hidden");
+    libraryPanel.classList.toggle("hidden", !opening);
+    libraryToggleButton.setAttribute("aria-expanded", String(opening));
+    if (opening) {
+        renderLibrary();
+        libraryPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+});
+
+libraryList.addEventListener("click", event => {
+    const button = event.target.closest("button[data-library-action]");
+    if (!button) return;
+    const itemId = button.dataset.libraryId;
+    const items = readLibrary();
+    if (button.dataset.libraryAction === "delete") {
+        try {
+            localStorage.setItem(LIBRARY_STORAGE_KEY, JSON.stringify(items.filter(item => item.id !== itemId)));
+            renderLibrary();
+        } catch (error) {
+            alert("Impossible de modifier la bibliothèque de ce navigateur.");
+        }
+        return;
+    }
+    const item = items.find(entry => entry.id === itemId);
+    if (item) openLibraryItem(item);
+});
+
+saveRevisionButton.addEventListener("click", () => {
+    const saved = saveLibraryItem("revision", currentRevisionTitle, currentRevisionText || resultContent.innerText, currentRevisionLibraryId);
+    if (saved) {
+        saveRevisionButton.textContent = "Enregistrée ✓";
+        libraryToggleButton.textContent = "📚 Ma bibliothèque";
+    }
+});
+
+saveExerciseButton.addEventListener("click", () => {
+    const saved = saveLibraryItem("exercise", currentExerciseTitle, currentExerciseText || exerciseSolutionContent.innerText, currentExerciseLibraryId);
+    if (saved) saveExerciseButton.textContent = "Enregistré ✓";
+});
+
+clearLibraryButton.addEventListener("click", () => {
+    if (!confirm("Effacer toutes les fiches, tous les exercices et tous les résultats enregistrés sur cet appareil ?")) return;
+    localStorage.removeItem(LIBRARY_STORAGE_KEY);
+    renderLibrary();
+});
+
+renderLibrary();
 
 
 /* =========================
@@ -459,6 +707,7 @@ form.addEventListener("submit", async event => {
         });
 
         const started = await response.json();
+        refreshUsageSummary();
 
         if (!response.ok) {
             throw new Error(
@@ -498,6 +747,14 @@ form.addEventListener("submit", async event => {
             typeof result.session_id === "string"
                 ? result.session_id
                 : "";
+
+        currentRevisionTitle = Array.isArray(result.sources) && result.sources.length
+            ? `Fiche — ${result.sources.map(source => String(source).split(/[\\/]/).pop()).join(", ")}`
+            : "Fiche de révision";
+        currentRevisionLibraryId = sessionId ? `revision-${sessionId}` : `revision-${Date.now()}`;
+        currentRevisionText = content;
+        quizButton.disabled = false;
+        saveRevisionButton.textContent = "＋ Enregistrer";
 
         resultContent.innerHTML =
             markdownToHtml(content);
@@ -568,7 +825,7 @@ copyButton.addEventListener("click", async () => {
 ========================= */
 
 async function loadQuiz() {
-    if (!sessionId) {
+    if (!sessionId && !currentRevisionText.trim()) {
         return;
     }
 
@@ -582,11 +839,13 @@ async function loadQuiz() {
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
-                session_id: sessionId
+                session_id: sessionId,
+                revision_text: sessionId ? "" : currentRevisionText,
             })
         });
 
         const result = await response.json();
+        refreshUsageSummary();
 
         if (!response.ok) {
             throw new Error(
@@ -608,6 +867,7 @@ async function loadQuiz() {
 
         quizIndex = 0;
         quizScoreValue = 0;
+        quizSavedForRun = false;
 
         quizResultCard.classList.add("hidden");
         quizCard.classList.remove("hidden");
@@ -795,6 +1055,18 @@ function finishQuiz() {
     } else {
         quizFinalMessage.textContent =
             "Refais un quiz pour renforcer tes connaissances.";
+    }
+
+    if (!quizSavedForRun) {
+        saveLibraryItem(
+            "quiz",
+            `Résultat du quiz — ${currentRevisionTitle}`,
+            `Score : ${quizScoreValue} / ${quizQuestions.length}`,
+            `quiz-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            quizScoreValue,
+            quizQuestions.length
+        );
+        quizSavedForRun = true;
     }
 
     quizResultCard.scrollIntoView({
@@ -1225,6 +1497,7 @@ detectExerciseButton.addEventListener("click", async () => {
     try {
         const response = await fetch("/api/detect-exercises", { method: "POST", body: data });
         const started = await response.json();
+        refreshUsageSummary();
         if (!response.ok) throw new Error(started.error || "Les fichiers n’ont pas pu être analysés.");
 
         const result = await waitForExercise(started.job_id);
@@ -1307,6 +1580,7 @@ exerciseForm.addEventListener("submit", async event => {
     try {
         const response = await fetch("/api/solve-exercise", { method: "POST", body: data });
         const started = await response.json();
+        refreshUsageSummary();
         if (!response.ok) throw new Error(started.error || "Les fichiers n'ont pas pu être envoyés.");
 
         const result = await waitForExercise(started.job_id);
@@ -1317,7 +1591,15 @@ exerciseForm.addEventListener("submit", async event => {
         if (!solution.trim()) throw new Error("L'IA n'a renvoyé aucune explication.");
 
         exerciseSessionId = typeof result.session_id === "string" ? result.session_id : "";
+        currentExerciseTitle = `Correction de l’exercice ${result.exercise_number || exerciseNumberInput.value.trim()}`;
+        currentExerciseLibraryId = exerciseSessionId ? `exercise-${exerciseSessionId}` : `exercise-${Date.now()}`;
+        currentExerciseText = solution;
+        saveExerciseButton.textContent = "＋ Enregistrer";
         exerciseSolutionContent.innerHTML = markdownToHtml(solution);
+        savedExerciseNotice.classList.add("hidden");
+        exerciseQuickHelp.classList.remove("hidden");
+        exerciseFeedbackSection.classList.remove("hidden");
+        exerciseChatSection.classList.remove("hidden");
         exerciseChatMessages.innerHTML = "";
         exerciseChatInput.value = "";
         exerciseChatStatus.textContent = "";
@@ -1432,6 +1714,7 @@ exerciseChatForm.addEventListener("submit", async event => {
             body: JSON.stringify({ session_id: exerciseSessionId, message })
         });
         const result = await response.json();
+        refreshUsageSummary();
         if (!response.ok) throw new Error(result.error || "RéviAI n'a pas pu répondre.");
 
         appendExerciseChatMessage("assistant", result.response || "");
@@ -1510,3 +1793,4 @@ exerciseFeedbackForm.addEventListener("submit", async event => {
 ========================= */
 
 renderFiles();
+refreshUsageSummary();
