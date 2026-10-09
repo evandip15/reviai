@@ -1,0 +1,21 @@
+{% extends "public_base.html" %}
+{% block title %}Guides de révision et exercices expliqués — RéviAI{% endblock %}
+{% block meta_description %}Des conseils pratiques pour réviser, choisir une méthode et vérifier une résolution de mathématiques.{% endblock %}
+{% block content %}
+<section class="editorial card">
+    <a class="back" href="/">← RéviAI</a>
+    <p class="kicker editorial-kicker">RESSOURCES GRATUITES</p>
+    <h1>Guides pour réviser et comprendre</h1>
+    <p class="editorial-intro">Des méthodes applicables, des exemples détaillés et des conseils pour mieux utiliser une correction. Tu peux lire ces ressources sans envoyer de fichier ni créer de compte.</p>
+    <div class="guide-grid">
+        {% for slug, guide in guides.items() %}
+        <a class="guide-card" href="/guides/{{ slug }}">
+            <span class="kicker">GUIDE</span>
+            <h2>{{ guide.title }}</h2>
+            <p>{{ guide.description }}</p>
+            <strong>Lire le guide →</strong>
+        </a>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

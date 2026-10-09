@@ -1,0 +1,17 @@
+{% extends "public_base.html" %}
+{% block title %}Questions fréquentes — RéviAI{% endblock %}
+{% block meta_description %}Réponses sur les formats de fichiers, la lecture des exercices, les réponses de l’IA et les données envoyées à RéviAI.{% endblock %}
+{% block content %}
+<article class="editorial card">
+    <a class="back" href="/">← RéviAI</a>
+    <p class="kicker editorial-kicker">AIDE</p>
+    <h1>Questions fréquentes</h1>
+    <section class="editorial-section"><h2>Quels fichiers puis-je importer ?</h2><p>Pour les fiches comme pour les exercices : PDF, DOCX, ODT, PPTX, TXT, JPG, JPEG, PNG et WEBP. Les documents contenant seulement des images peuvent nécessiter l’OCR ou l’envoi d’une photo. Un PDF scanné peut être lu par Gemini si cette option est configurée.</p></section>
+    <section class="editorial-section"><h2>Puis-je envoyer plusieurs photos pour un exercice ?</h2><p>Oui. Sélectionne toutes les pages du même exercice en une fois et dans l’ordre de lecture. Il n’y a pas de nombre fixe de photos ; la taille totale de l’envoi est limitée à 20 Mo par défaut. Le recadrage facultatif reste disponible pour une photo seule.</p></section>
+    <section class="editorial-section"><h2>Comment éviter que l’IA choisisse le mauvais exercice ?</h2><p>Indique le numéro dans la consigne, par exemple « exercice 63 uniquement », et nomme les questions souhaitées. La photo entière est acceptée ; tu peux aussi utiliser le recadrage facultatif. Consulte le <a href="/guides/resoudre-exercice">guide d’envoi d’un exercice</a>.</p></section>
+    <section class="editorial-section"><h2>Pourquoi une réponse peut-elle être incorrecte ?</h2><p>La lecture automatique peut confondre des caractères ou une formule, et le modèle peut faire une erreur de raisonnement. Vérifie la transcription, les hypothèses et chaque étape avec ton cours. Une réponse automatique n’est pas une correction certifiée par un professeur.</p></section>
+    <section class="editorial-section"><h2>Mes documents sont-ils conservés ?</h2><p>Les fichiers importés sont temporaires et supprimés après leur traitement. Le texte utile à la fiche ou à la conversation est gardé en mémoire du serveur pendant une durée limitée pour permettre le quiz ou les questions de suivi ; il n’est pas enregistré comme un compte personnel.</p></section>
+    <section class="editorial-section"><h2>Est-ce que RéviAI est gratuit ?</h2><p>L’application ne demande pas de paiement pour créer une fiche ou résoudre un exercice. Le nombre d’utilisations peut être limité selon la configuration du serveur. Une éventuelle publicité ne s’affiche que sur les guides publics et après activation par l’éditeur.</p></section>
+    <section class="editorial-section"><h2>Comment sont traités mes fichiers et mes échanges ?</h2><p>Les fichiers sont supprimés après leur traitement. Le texte utile aux fonctions de fiche, quiz et chat est conservé temporairement en mémoire du serveur. La <a href="/privacy">politique de confidentialité</a> détaille ce fonctionnement et les services tiers concernés.</p></section>
+</article>
+{% endblock %}

@@ -1,16 +1,35 @@
-<!doctype html>
-<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Confidentialité — RéviAI</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <!-- Google Analytics -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-263S8P8W2V"></script>
-    <script>
-        window.dataLayer = window.dataLayer || [];
-        function gtag(){dataLayer.push(arguments);}
-        gtag('js', new Date());
-        gtag('config', 'G-263S8P8W2V');
-    </script>
+{% extends "public_base.html" %}
+{% block title %}Politique de confidentialité — RéviAI{% endblock %}
+{% block meta_description %}Comment RéviAI traite les fichiers importés, les échanges avec l’IA et les cookies publicitaires.{% endblock %}
+{% block content %}
+<article class="editorial card">
+    <a class="back" href="/">← RéviAI</a>
+    <p class="kicker editorial-kicker">DONNÉES ET CONFIDENTIALITÉ</p>
+    <h1>Politique de confidentialité</h1>
+    <p class="editorial-intro">Mise à jour : 9 octobre 2026. Cette page décrit les données traitées lorsque tu utilises RéviAI, outil de fiches, quiz et résolution d’exercices.</p>
 
-    <!-- Google AdSense -->
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3292344498702156" crossorigin="anonymous"></script>
+    <section class="editorial-section"><h2>Informations demandées aux visiteurs</h2>
+        <p>RéviAI ne demande pas de nom, d’adresse e-mail ou de compte pour utiliser les fiches, quiz et exercices.</p>
+    </section>
 
-</head>
-<body><main class="legal wrap"><a class="back" href="/">← RéviAI</a><h1>Confidentialité</h1><p>Les fichiers importés sont traités pour générer la fiche et le quiz. Le serveur supprime les fichiers temporaires après traitement.</p><p>Le contenu du cours peut être envoyé au fournisseur d'IA configuré par le site pour produire la fiche et le quiz. N'importe pas de données sensibles ou personnelles inutiles.</p><p>Pour la version cloud, le site peut utiliser Gemini API lorsque cette option est activée. Consulte la configuration du service IA utilisé avant de publier le site pour un usage réel.</p></main></body></html>
+    <section class="editorial-section"><h2>Fichiers et messages envoyés</h2>
+        <p>Lorsque tu importes un document ou une photo, RéviAI le reçoit pour en extraire le contenu puis créer une fiche ou résoudre l’exercice. Les fichiers téléchargés sont temporaires et supprimés par le serveur après le traitement. Le texte de la fiche, du cours et de la conversation d’exercice est gardé en mémoire pour permettre le quiz et les questions de suivi, puis expire au bout d’une heure. RéviAI ne demande pas de compte personnel.</p>
+        <p>Ne téléverse pas d’informations médicales, financières, de mots de passe, ni de données personnelles qui ne sont pas nécessaires à l’exercice. Les fichiers et les réponses transitent aussi par l’hébergeur du site, qui peut traiter des données techniques de connexion (par exemple l’adresse IP, l’heure et le navigateur) pour assurer le fonctionnement et la sécurité du service, selon ses propres règles de conservation.</p>
+    </section>
+
+    <section class="editorial-section"><h2>Fournisseurs d’intelligence artificielle</h2>
+        <p>Selon la configuration de RéviAI, le texte extrait d’un fichier, une image ou un message de suivi peut être transmis au service d’intelligence artificielle utilisé pour produire une réponse. Sur la version cloud configurée avec Gemini, ces contenus sont transmis à l’API de Google. Sur une installation locale utilisant Ollama, ils sont traités par le modèle configuré sur le serveur local. Le fournisseur concerné traite les données selon ses propres conditions et règles de confidentialité.</p>
+        <p>Les contenus générés automatiquement peuvent être inexacts. Consulte les <a href="/terms">conditions d’utilisation</a> avant d’utiliser une réponse pour un travail scolaire.</p>
+    </section>
+
+    <section class="editorial-section"><h2>Cookies, mesure d’audience et publicité</h2>
+        <p>RéviAI n’active pas Google Analytics. Le site utilise les données techniques nécessaires à son fonctionnement et à la sécurité de l’hébergement.</p>
+        <p>Les publicités AdSense sont désactivées par défaut. Si l’éditeur les active, Google et ses partenaires peuvent utiliser des cookies, des identifiants en ligne et l’adresse IP pour fournir et mesurer les annonces. Selon les choix exprimés, Google peut aussi personnaliser les annonces à partir de l’activité antérieure sur ce site ou d’autres sites et applications. Les visiteurs peuvent gérer ou désactiver la personnalisation dans <a href="https://myadcenter.google.com/">Mon centre d’annonces Google</a> et consulter la <a href="https://policies.google.com/technologies/ads?hl=fr">politique de Google sur la publicité</a>.</p>
+        <p>Avant l’activation d’annonces personnalisées dans l’Espace économique européen, au Royaume-Uni ou en Suisse, l’éditeur doit configurer une plateforme de gestion du consentement certifiée par Google et compatible avec le TCF de l’IAB. L’activation des publicités dans le code de RéviAI reste bloquée tant que l’éditeur ne déclare pas cette configuration prête.</p>
+    </section>
+
+    <section class="editorial-section"><h2>Durée et demandes</h2>
+        <p>Les fichiers importés sont supprimés à la fin du traitement. Les contenus nécessaires aux fonctions de fiche, quiz et chat sont gardés temporairement en mémoire, jusqu’à une heure. Il n’existe pas de profil utilisateur ni d’historique permanent.</p>
+    </section>
+</article>
+{% endblock %}

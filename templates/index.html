@@ -3,26 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="RéviAI transforme tes cours en fiches de révision et quiz grâce à l'IA.">
+    <meta name="description" content="RéviAI transforme tes cours en fiches et quiz, et explique des exercices envoyés en photo ou en document.">
     <meta name="theme-color" content="#5b4cf6">
-    <title>RéviAI — Fiches + Quiz IA</title>
+    <title>RéviAI — Révisions et exercices avec l'IA</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    {% if ads_enabled %}
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ ads_client_id }}" crossorigin="anonymous"></script>
-    {% endif %}
-
-    <!-- Google Analytics -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-263S8P8W2V"></script>
-    <script>
-        window.dataLayer = window.dataLayer || [];
-        function gtag(){dataLayer.push(arguments);}
-        gtag('js', new Date());
-        gtag('config', 'G-263S8P8W2V');
-    </script>
-
-    <!-- Google AdSense -->
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3292344498702156" crossorigin="anonymous"></script>
-
 </head>
 <body>
     <div class="page-glow glow-a"></div>
@@ -35,42 +19,43 @@
                 <span><b>Révi<span class="brand-ai">AI</span></b><small>Révise mieux</small></span>
             </a>
             <div class="top-actions">
-                <a href="/privacy" class="nav-link">Confidentialité</a>
+                <a href="/guides" class="nav-link">Guides</a>
+                <a href="/a-propos" class="nav-link">À propos</a>
             </div>
         </div>
     </header>
 
     <main class="wrap">
-        {% if ads_enabled and ads_slot_id %}
-        <div class="ad-slot ad-top" aria-label="Publicité">
-            <ins class="adsbygoogle" style="display:block" data-ad-client="{{ ads_client_id }}" data-ad-slot="{{ ads_slot_id }}" data-ad-format="auto" data-full-width-responsive="true"></ins>
-        </div>
-        <script>
-            (adsbygoogle = window.adsbygoogle || []).push({});
-        </script>
-        {% else %}
-        <div class="ad-slot ad-placeholder" aria-hidden="true"><span>Emplacement publicitaire</span></div>
-        {% endif %}
-
         <section class="hero">
             <div>
-                <span class="pill">🧠 FICHE + QUIZ</span>
-                <h1>Ton cours devient un <span>outil pour réviser</span>.</h1>
-                <p>Importe un document, génère une fiche claire puis teste-toi avec des questions conçues à partir de ton cours.</p>
+                <span class="pill">🧠 FICHES + EXERCICES</span>
+                <h1>Tes cours deviennent des <span>outils pour progresser</span>.</h1>
+                <p>Crée une fiche à partir de tes cours ou envoie une photo ou un document d’exercice pour obtenir une résolution expliquée.</p>
             </div>
             <div class="hero-stats">
-                <div><strong>1</strong><span>cours importé</span></div>
-                <div><strong>2</strong><span>modes de révision</span></div>
-                <div><strong>∞</strong><span>questions possibles</span></div>
+                <div><strong>2</strong><span>activités : fiches et exercices</span></div>
+                <div><strong>10</strong><span>questions par quiz</span></div>
+                <div><strong>📎</strong><span>photo ou document d’exercice</span></div>
             </div>
         </section>
 
-        <section class="card main-card">
+        <nav class="mode-switcher" aria-label="Choisir une activité">
+            <button class="mode-option active" id="revisionModeButton" type="button" aria-pressed="true">
+                <span class="mode-icon">📚</span>
+                <span><strong>Créer une fiche</strong><small>À partir de tes cours</small></span>
+            </button>
+            <button class="mode-option" id="exerciseModeButton" type="button" aria-pressed="false">
+                <span class="mode-icon">📎</span>
+                <span><strong>Résoudre un exercice</strong><small>Envoie une photo ou un document</small></span>
+            </button>
+        </nav>
+
+        <section id="revisionFormCard" class="card main-card">
             <div class="section-head">
                 <div>
                     <span class="kicker">ÉTAPE 1</span>
                     <h2>Importe ton cours</h2>
-                    <p>PDF, DOCX, PPTX, TXT ou plusieurs photos de cours.</p>
+                    <p>PDF, DOCX, ODT, PPTX, TXT ou plusieurs photos de cours.</p>
                 </div>
                 <div class="section-number">01</div>
             </div>
@@ -88,6 +73,73 @@
                 <button id="generateButton" class="button button-primary" type="submit">✨ Générer ma fiche</button>
                 <div id="status" class="status"></div>
             </form>
+        </section>
+
+        <section id="exerciseFormCard" class="card main-card hidden">
+            <div class="section-head">
+                <div>
+                    <span class="kicker">MODE EXERCICE</span>
+                    <h2>Fais résoudre ton exercice</h2>
+                    <p>Envoie une photo ou un document (PDF, DOCX, ODT, PPTX, TXT) : l’IA t’expliquera la solution étape par étape.</p>
+                </div>
+                <div class="section-number">📸</div>
+            </div>
+
+            <form id="exerciseForm">
+                <div id="exerciseDropZone" class="dropzone exercise-dropzone">
+                    <input id="exercisePhoto" name="photos" type="file" multiple accept=".pdf,.docx,.odt,.pptx,.txt,.jpg,.jpeg,.png,.webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.oasis.opendocument.text,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,image/jpeg,image/png,image/webp">
+                    <div class="upload-illustration">📝</div>
+                    <h3>Ajoute une ou plusieurs photos ou documents</h3>
+                    <p>Pour un exercice sur plusieurs pages, sélectionne les photos dans l’ordre. La taille totale reste limitée à 20 Mo.</p>
+                    <label class="button button-secondary" for="exercisePhoto">📎 Choisir des fichiers</label>
+                    <div id="exercisePreview" class="exercise-preview hidden">
+                        <div id="exerciseFileName" class="exercise-file-list"></div>
+                    </div>
+                </div>
+                <div id="exerciseCropSection" class="exercise-crop-section hidden">
+                    <label for="exerciseCropCanvas">Recadrage facultatif</label>
+                    <p class="field-help">La photo entière sera envoyée par défaut. Le recadrage est proposé quand tu sélectionnes une seule photo.</p>
+                    <canvas id="exerciseCropCanvas" aria-label="Photo de l’exercice : fais glisser pour choisir la zone à envoyer"></canvas>
+                    <div class="exercise-crop-actions">
+                        <button id="resetExerciseCrop" class="button button-secondary" type="button">Garder la photo entière</button>
+                        <button id="confirmExerciseCrop" class="button button-primary" type="button" disabled>Utiliser cette zone</button>
+                    </div>
+                    <div id="exerciseCropStatus" class="field-help" role="status" aria-live="polite">La photo complète sera utilisée. Le recadrage est facultatif.</div>
+                </div>
+                <div class="exercise-instruction-field">
+                    <label for="exerciseInstruction">Quel exercice veux-tu faire ?</label>
+                    <p class="field-help">Indique un seul numéro et, si utile, ta matière ou ton niveau. Exemple : « exercice 3 uniquement — spé maths, Terminale ».</p>
+                    <textarea id="exerciseInstruction" name="instruction" rows="2" maxlength="1000" required placeholder="Exercice demandé et niveau"></textarea>
+                </div>
+                <button id="solveExerciseButton" class="button button-primary" type="submit">✨ Résoudre mon exercice</button>
+                <div id="exerciseStatus" class="status" role="status" aria-live="polite"></div>
+            </form>
+        </section>
+
+        <section id="exerciseResultCard" class="card hidden">
+            <div class="section-head">
+                <div>
+                    <span class="kicker">RÉSOLUTION</span>
+                    <h2>La solution expliquée</h2>
+                    <p>Relis les étapes et vérifie comment le résultat a été obtenu.</p>
+                </div>
+                <button id="copyExerciseButton" class="button button-secondary" type="button">Copier</button>
+            </div>
+            <article id="exerciseSolutionContent" class="revision"></article>
+            <div class="exercise-chat">
+                <div class="exercise-chat-heading">
+                    <span class="kicker">CONTINUER LA CONVERSATION</span>
+                    <h3>Tu peux lui poser une question</h3>
+                    <p>Demande une précision, une autre méthode ou détaille ce qui te bloque.</p>
+                </div>
+                <div id="exerciseChatMessages" class="chat-messages" role="log" aria-live="polite"></div>
+                <form id="exerciseChatForm" class="chat-form">
+                    <label class="sr-only" for="exerciseChatInput">Ton message à RéviAI</label>
+                    <textarea id="exerciseChatInput" rows="2" maxlength="1500" placeholder="Exemple : pourquoi as-tu utilisé cette formule ?"></textarea>
+                    <button id="sendExerciseChatButton" class="button button-primary" type="submit">Envoyer →</button>
+                </form>
+                <div id="exerciseChatStatus" class="status" role="status" aria-live="polite"></div>
+            </div>
         </section>
 
         <section id="resultCard" class="card hidden">
@@ -110,15 +162,6 @@
                 <button id="quizButton" class="button button-primary" type="button">🧠 Lancer le quiz</button>
             </div>
         </section>
-
-        {% if ads_enabled and ads_slot_id %}
-        <div class="ad-slot" aria-label="Publicité">
-            <ins class="adsbygoogle" style="display:block" data-ad-client="{{ ads_client_id }}" data-ad-slot="{{ ads_slot_id }}" data-ad-format="auto" data-full-width-responsive="true"></ins>
-        </div>
-        <script>
-            (adsbygoogle = window.adsbygoogle || []).push({});
-        </script>
-        {% endif %}
 
         <section id="quizCard" class="card hidden">
             <div class="quiz-head">
@@ -151,25 +194,22 @@
             </div>
         </section>
 
-        {% if ads_enabled and ads_slot_id %}
-        <div class="ad-slot ad-bottom" aria-label="Publicité">
-            <ins class="adsbygoogle" style="display:block" data-ad-client="{{ ads_client_id }}" data-ad-slot="{{ ads_slot_id }}" data-ad-format="auto" data-full-width-responsive="true"></ins>
-        </div>
-        <script>
-            (adsbygoogle = window.adsbygoogle || []).push({});
-        </script>
-        {% else %}
         <section class="card info-card">
-            <span class="kicker">RÉVIAI</span>
-            <h2>Un site gratuit pour réviser</h2>
-            <p>La version publique reste gratuite. Des emplacements publicitaires sont prévus pour pouvoir financer plus tard les coûts d'hébergement et d'IA, sans ajouter de paiement dans l'application.</p>
+            <span class="kicker">POUR ALLER PLUS LOIN</span>
+            <h2>Des méthodes de révision et des exemples expliqués</h2>
+                <p>Retrouve des conseils concrets pour préparer un contrôle et vérifier une solution.</p>
+            <div class="resource-links">
+                <a href="/guides/reviser-efficacement">Réviser efficacement <span>→</span></a>
+                <a href="/guides/resoudre-exercice">Bien envoyer un exercice <span>→</span></a>
+            </div>
         </section>
-        {% endif %}
 
     </main>
 
     <footer>
         <span>RéviAI © 2026</span>
+        <a href="/guides">Guides</a>
+        <a href="/faq">FAQ</a>
         <a href="/terms">Conditions</a>
         <a href="/privacy">Confidentialité</a>
     </footer>

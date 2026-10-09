@@ -1,0 +1,24 @@
+{% extends "public_base.html" %}
+{% block title %}À propos de RéviAI{% endblock %}
+{% block meta_description %}Découvrez RéviAI, un outil de révision avec des fiches, des quiz et des exercices expliqués.{% endblock %}
+{% block content %}
+<article class="editorial card">
+    <a class="back" href="/">← RéviAI</a>
+    <p class="kicker editorial-kicker">À PROPOS</p>
+    <h1>RéviAI aide à travailler un cours, pas à le remplacer</h1>
+    <p class="editorial-intro">RéviAI rassemble trois usages pour accompagner les révisions : transformer des documents de cours en fiche, s’entraîner avec un quiz et demander une explication guidée sur un exercice.</p>
+    <section class="editorial-section">
+        <h2>Comment fonctionne l’outil ?</h2>
+        <p>Pour créer une fiche, l’application lit les fichiers envoyés puis demande au service d’intelligence artificielle configuré de les organiser. Pour un exercice, l’élève précise le numéro ou la partie à traiter ; RéviAI lit le document, propose une résolution et permet de poser des questions sur les étapes.</p>
+        <p>Les formats de document acceptés sont PDF, DOCX, ODT, PPTX et TXT. Les photos JPG, JPEG, PNG et WEBP sont également acceptées. Le contenu d’un PDF numérisé peut nécessiter une lecture par Gemini lorsque cette option est disponible.</p>
+    </section>
+    <section class="editorial-section">
+        <h2>Une aide à vérifier</h2>
+        <p>Une réponse générée peut mal lire un signe, oublier une hypothèse ou se tromper dans un calcul. Compare les étapes à ton cours, vérifie les données de l’énoncé et demande une explication si un passage n’est pas clair. Les consignes de ton enseignant et le manuel restent les références pour le travail demandé.</p>
+    </section>
+    <section class="editorial-section">
+        <h2>Ressources</h2>
+        <p>Les <a href="/guides">guides gratuits</a> détaillent des méthodes de révision et donnent des conseils pour envoyer un exercice. La <a href="/faq">FAQ</a> répond aux questions les plus courantes et la <a href="/privacy">politique de confidentialité</a> explique le traitement des fichiers.</p>
+    </section>
+</article>
+{% endblock %}

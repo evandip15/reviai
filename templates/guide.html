@@ -1,0 +1,22 @@
+{% extends "public_base.html" %}
+{% block title %}{{ guide.title }} — RéviAI{% endblock %}
+{% block meta_description %}{{ guide.description }}{% endblock %}
+{% block content %}
+<article class="editorial card">
+    <a class="back" href="/guides">← Tous les guides</a>
+    <p class="kicker editorial-kicker">MÉTHODES DE RÉVISION</p>
+    <h1>{{ guide.title }}</h1>
+    <p class="editorial-intro">{{ guide.intro }}</p>
+    {% for section in guide.sections %}
+    <section class="editorial-section">
+        <h2>{{ section.heading }}</h2>
+        {% for paragraph in section.paragraphs %}<p>{{ paragraph }}</p>{% endfor %}
+    </section>
+    {% endfor %}
+    <aside class="editorial-note">
+        <strong>Pour continuer :</strong>
+        <a href="/guides">Découvre les autres guides</a> ou
+        <a href="/">utilise l’outil RéviAI</a> avec ton cours ou ton exercice.
+    </aside>
+</article>
+{% endblock %}

@@ -1,16 +1,17 @@
-<!doctype html>
-<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Conditions — RéviAI</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <!-- Google Analytics -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-263S8P8W2V"></script>
-    <script>
-        window.dataLayer = window.dataLayer || [];
-        function gtag(){dataLayer.push(arguments);}
-        gtag('js', new Date());
-        gtag('config', 'G-263S8P8W2V');
-    </script>
-
-    <!-- Google AdSense -->
-    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3292344498702156" crossorigin="anonymous"></script>
-
-</head>
-<body><main class="legal wrap"><a class="back" href="/">← RéviAI</a><h1>Conditions d'utilisation</h1><p>RéviAI fournit une aide à la révision et ne remplace pas le cours, les consignes de l'enseignant ou les vérifications personnelles.</p><p>Le contenu généré par l'IA peut contenir des erreurs. Vérifie les informations importantes avant de les utiliser pour un devoir ou un examen.</p></main></body></html>
+{% extends "public_base.html" %}
+{% block title %}Conditions d’utilisation — RéviAI{% endblock %}
+{% block meta_description %}Règles d’utilisation de RéviAI, outil d’aide à la révision et de résolution expliquée d’exercices.{% endblock %}
+{% block content %}
+<article class="editorial card">
+    <a class="back" href="/">← RéviAI</a>
+    <p class="kicker editorial-kicker">UTILISATION DU SERVICE</p>
+    <h1>Conditions d’utilisation</h1>
+    <p class="editorial-intro">Mise à jour : 9 octobre 2026. En utilisant RéviAI, tu acceptes les règles suivantes.</p>
+    <section class="editorial-section"><h2>À quoi sert RéviAI ?</h2><p>RéviAI est un outil d’aide à l’apprentissage. Il peut transformer des documents en fiches, proposer un quiz et expliquer des exercices à partir d’un document ou d’une photo. L’accès peut être limité par la configuration du service.</p></section>
+    <section class="editorial-section"><h2>Exactitude des réponses</h2><p>Les textes sont extraits automatiquement et les réponses sont générées par une intelligence artificielle. Une formule, un signe, une figure ou une consigne peut être mal lu ; le raisonnement peut aussi contenir une erreur. Vérifie les étapes avec le cours et demande à ton enseignant en cas de doute. Une réponse de RéviAI ne constitue pas une correction officielle ni une garantie de résultat.</p></section>
+    <section class="editorial-section"><h2>Utilisation responsable</h2><p>Utilise le service pour comprendre, t’entraîner et vérifier ton raisonnement. Respecte les consignes de ton établissement et les droits d’auteur. N’envoie pas de contenu illicite, de données personnelles non nécessaires, de documents confidentiels ou de fichiers que tu n’as pas le droit de partager.</p></section>
+    <section class="editorial-section"><h2>Fichiers et services tiers</h2><p>Les fichiers sont traités pour exécuter la fonction choisie puis supprimés par l’application. Selon la configuration, leur contenu peut être transmis à un fournisseur d’intelligence artificielle. Les fournisseurs tiers restent soumis à leurs propres conditions. Les détails figurent dans la <a href="/privacy">politique de confidentialité</a>.</p></section>
+    <section class="editorial-section"><h2>Disponibilité et évolution</h2><p>RéviAI est fourni tel qu’il est disponible et peut être temporairement inaccessible pour maintenance, limite d’usage ou problème chez un fournisseur. Les fonctionnalités, limites et présentes conditions peuvent évoluer ; la date de mise à jour sera indiquée sur cette page.</p></section>
+    <section class="editorial-section"><h2>Questions fréquentes</h2><p>La <a href="/faq">FAQ</a> présente les réponses aux questions courantes sur l’utilisation du service et les formats de fichiers.</p></section>
+</article>
+{% endblock %}

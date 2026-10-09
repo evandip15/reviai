@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="{% block meta_description %}RéviAI : méthodes de révision, exercices expliqués et conseils pour apprendre.{% endblock %}">
+    <meta name="theme-color" content="#5b4cf6">
+    <title>{% block title %}RéviAI — Réviser et comprendre{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    {% if show_ads and ads_enabled and ads_client_id and ads_slot_id %}
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ ads_client_id }}" crossorigin="anonymous"></script>
+    {% endif %}
+</head>
+<body>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <a class="brand" href="/">
+                <span class="brand-icon">R</span>
+                <span><b>Révi<span class="brand-ai">AI</span></b><small>Révise mieux</small></span>
+            </a>
+            <nav class="public-nav" aria-label="Navigation principale">
+                <a href="/">Outil de révision</a>
+                <a href="/guides">Guides</a>
+                <a href="/faq">FAQ</a>
+                <a href="/a-propos">À propos</a>
+            </nav>
+        </div>
+    </header>
+    <main class="wrap public-main">
+        {% block content %}{% endblock %}
+        {% if show_ads and ads_enabled and ads_client_id and ads_slot_id %}
+        <div class="editorial-ad" aria-label="Publicité">
+            <ins class="adsbygoogle" style="display:block" data-ad-client="{{ ads_client_id }}" data-ad-slot="{{ ads_slot_id }}" data-ad-format="auto" data-full-width-responsive="true"></ins>
+        </div>
+        <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+        {% endif %}
+    </main>
+    <footer class="public-footer">
+        <span>RéviAI © 2026</span>
+        <a href="/guides">Guides</a>
+        <a href="/faq">FAQ</a>
+        <a href="/terms">Conditions</a>
+        <a href="/privacy">Confidentialité</a>
+    </footer>
+</body>
+</html>

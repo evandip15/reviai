@@ -22,6 +22,8 @@ services:
         sync: false
       - key: ADS_ENABLED
         value: "false"
+      - key: ADS_CONSENT_READY
+        value: "false"
       - key: ADSENSE_CLIENT_ID
         sync: false
       - key: ADSENSE_SLOT_ID
