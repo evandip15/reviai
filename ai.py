@@ -27,6 +27,7 @@ RÈGLES ABSOLUES
 - Regroupe les idées proches sans supprimer les informations utiles.
 - Utilise des titres et sous-titres adaptés au contenu réel.
 - Mets les mots-clés, chiffres et formules importants en **gras**.
+- Écris les formules dans une notation directement lisible : H₂O, CO₂, x², 10⁻³, → et ≈. N'utilise pas les délimiteurs LaTeX $...$ ni les commandes comme \\rightarrow ou \\frac, car elles s'afficheraient comme du texte.
 - Pour les calculs, garde le calcul et le résultat.
 - Pour l'analyse littéraire, conserve les mouvements, procédés, images et effets présents dans le cours.
 - Ne crée ni quiz ni questions dans la fiche.

@@ -104,8 +104,40 @@ function escapeHtml(value) {
 
 function inlineMarkdown(text) {
     return escapeHtml(text)
+        .replace(/\$([^$\n]+)\$/g, (_, expression) =>
+            `<span class="math-inline">${renderInlineMath(expression)}</span>`
+        )
         .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
         .replace(/\*(.+?)\*/g, "<em>$1</em>");
+}
+
+function renderInlineMath(expression) {
+    const symbols = {
+        "\\rightarrow": "→",
+        "\\to": "→",
+        "\\approx": "≈",
+        "\\times": "×",
+        "\\cdot": "·",
+        "\\leq": "≤",
+        "\\geq": "≥",
+        "\\neq": "≠",
+        "\\pm": "±",
+        "\\infty": "∞"
+    };
+
+    let result = expression;
+    for (const [command, symbol] of Object.entries(symbols)) {
+        result = result.replaceAll(command, symbol);
+    }
+
+    return result
+        .replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, "($1)/($2)")
+        .replace(/\\text\{([^{}]*)\}/g, "$1")
+        .replace(/_\{([^{}]+)\}/g, '<sub>$1</sub>')
+        .replace(/_(\w+)/g, '<sub>$1</sub>')
+        .replace(/\^\{([^{}]+)\}/g, '<sup>$1</sup>')
+        .replace(/\^(\w+|[+-])/g, '<sup>$1</sup>')
+        .replace(/[{}]/g, "");
 }
 
 function markdownToHtml(markdown) {
@@ -143,6 +175,13 @@ function markdownToHtml(markdown) {
         if (!line) {
             flushParagraph();
             closeList();
+            continue;
+        }
+
+        if (/^(?:---+|\*\*\*+|___+)$/.test(line)) {
+            flushParagraph();
+            closeList();
+            out.push("<hr>");
             continue;
         }
 
