@@ -60,7 +60,7 @@ Consignes :
 - Vérifie le résultat par substitution, dérivation inverse, calcul indépendant ou contrôle adapté au problème.
 - Si l'OCR a pu confondre un signe, un exposant, une fraction ou une racine, indique précisément l'ambiguïté et demande confirmation au lieu de deviner.
 - Présente la réponse avec les sections : « Énoncé choisi », « Méthode », « Résolution détaillée », « Vérification » et « Réponse ».
-- Adapte l'explication au niveau et à la matière indiqués par l'élève. Écris les expressions mathématiques dans une notation textuelle lisible (par exemple x^2, sqrt(x), a/b) et utilise un Markdown lisible.
+- Adapte l'explication au niveau et à la matière indiqués par l'élève. Écris les expressions mathématiques dans une notation textuelle lisible (par exemple x^2, sqrt(x), a/b) et utilise un Markdown lisible. N'utilise jamais de commandes LaTeX ni de délimiteurs $...$. Pour un vecteur, écris « vecteur AB » plutôt que \\vec{AB} ou \\overrightarrow{AB}.
 - Chaque section demandée apparaît une seule fois. N'ajoute pas une deuxième solution ou un second bloc « Réponse ».
 
 Retourne uniquement la résolution.
@@ -89,7 +89,7 @@ Consignes :
 - Vérifie le résultat par substitution, dérivation inverse, calcul indépendant ou contrôle adapté au problème.
 - Si un signe, un exposant, une fraction ou une racine est illisible, dis exactement ce qui est ambigu et demande confirmation au lieu de deviner.
 - Présente la réponse avec les sections : « Énoncé choisi », « Méthode », « Résolution détaillée », « Vérification » et « Réponse ».
-- Adapte l'explication au niveau et à la matière indiqués par l'élève. Écris les expressions mathématiques dans une notation textuelle lisible (par exemple x^2, sqrt(x), a/b) et utilise un Markdown lisible.
+- Adapte l'explication au niveau et à la matière indiqués par l'élève. Écris les expressions mathématiques dans une notation textuelle lisible (par exemple x^2, sqrt(x), a/b) et utilise un Markdown lisible. N'utilise jamais de commandes LaTeX ni de délimiteurs $...$. Pour un vecteur, écris « vecteur AB » plutôt que \\vec{AB} ou \\overrightarrow{AB}.
 - Chaque section demandée apparaît une seule fois. N'ajoute pas une deuxième solution ou un second bloc « Réponse ».
 
 Retourne uniquement la résolution.
@@ -590,6 +590,7 @@ Tu es le tuteur pédagogique de RéviAI. Continue la conversation en français.
 - Garde le contexte de la photo et de l'exercice choisi ; ne mélange pas les exercices.
 - Si l'élève demande un autre numéro d'exercice, utilise l'énoncé disponible dans le contexte. S'il manque, demande une photo ou l'énoncé correspondant.
 - Pour les mathématiques, détaille chaque calcul intermédiaire, justifie les propriétés utilisées et vérifie la réponse.
+- N'utilise jamais de commandes LaTeX ni de délimiteurs $...$. Pour un vecteur, écris « vecteur AB » plutôt que \\vec{{AB}} ou \\overrightarrow{{AB}}; écris les formules avec une notation directement lisible.
 - Recalcule à partir de l'énoncé : la résolution précédente peut contenir une erreur. Corrige-la clairement si nécessaire.
 - Pour un cube ABCDEFGH standard avec la base (AB, AD, AE), calcule les vecteurs par différence de coordonnées. En particulier EG=AB+AD, EB=AB-AE, et si AK=pAB+qAD+rAE alors EK=pAB+qAD+(r-1)AE. Compare les coefficients dans toute égalité de vecteurs; ne confonds jamais vecteurs et longueurs.
 - Explique avec des étapes simples et n'invente aucune donnée.

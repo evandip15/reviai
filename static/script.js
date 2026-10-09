@@ -103,10 +103,7 @@ function escapeHtml(value) {
 ========================= */
 
 function inlineMarkdown(text) {
-    return escapeHtml(text)
-        .replace(/\$([^$\n]+)\$/g, (_, expression) =>
-            `<span class="math-inline">${renderInlineMath(expression)}</span>`
-        )
+    return renderInlineMath(escapeHtml(text).replace(/\$/g, ""))
         .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
         .replace(/\*(.+?)\*/g, "<em>$1</em>");
 }
@@ -114,30 +111,49 @@ function inlineMarkdown(text) {
 function renderInlineMath(expression) {
     const symbols = {
         "\\rightarrow": "→",
+        "\\longrightarrow": "→",
         "\\to": "→",
+        "\\implies": "⇒",
+        "\\Rightarrow": "⇒",
         "\\approx": "≈",
         "\\times": "×",
+        "\\cdots": "…",
+        "\\dots": "…",
         "\\cdot": "·",
         "\\leq": "≤",
         "\\geq": "≥",
         "\\neq": "≠",
         "\\pm": "±",
-        "\\infty": "∞"
+        "\\infty": "∞",
+        "\\notin": "∉",
+        "\\in": "∈",
+        "\\pi": "π",
+        "\\Delta": "Δ",
     };
 
-    let result = expression;
+    let result = expression
+        .replace(/\\text\{([^{}]*)\}/g, "$1")
+        .replace(/\\(?:vec|overrightarrow)\s*\{([A-Za-z]{1,8})\}/g, '<span class="vector-notation">$1</span>')
+        .replace(/\\vec([A-Za-z]{1,3})/g, '<span class="vector-notation">$1</span>')
+        .replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, "($1)/($2)")
+        .replace(/\\sqrt\{([^{}]+)\}/g, "√($1)")
+        .replace(/\\mathbb\{R\}/g, "ℝ")
+        .replace(/\\mathbb\{N\}/g, "ℕ")
+        .replace(/\\mathbb\{Z\}/g, "ℤ")
+        .replace(/\\mathbb\{Q\}/g, "ℚ");
+
     for (const [command, symbol] of Object.entries(symbols)) {
         result = result.replaceAll(command, symbol);
     }
 
     return result
-        .replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, "($1)/($2)")
-        .replace(/\\text\{([^{}]*)\}/g, "$1")
+        .replace(/\\left|\\right/g, "")
+        .replace(/\\quad|\\qquad|\\,|\\;/g, " ")
         .replace(/_\{([^{}]+)\}/g, '<sub>$1</sub>')
         .replace(/_(\w+)/g, '<sub>$1</sub>')
         .replace(/\^\{([^{}]+)\}/g, '<sup>$1</sup>')
         .replace(/\^(\w+|[+-])/g, '<sup>$1</sup>')
-        .replace(/[{}]/g, "");
+        .replace(/\\([A-Za-z]+)/g, "$1");
 }
 
 function markdownToHtml(markdown) {
