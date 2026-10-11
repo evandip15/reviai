@@ -19,6 +19,32 @@ def ensure_study_tables(connection, core):
         user_id TEXT NOT NULL REFERENCES reviai_accounts(id) ON DELETE CASCADE,
         id TEXT NOT NULL, name TEXT NOT NULL,
         PRIMARY KEY (user_id, id), UNIQUE (user_id, name))""")
+    # L'éditeur n'est pas un compte élève. Sa bibliothèque a son propre espace.
+    connection.execute("""CREATE TABLE IF NOT EXISTS reviai_study_editors (
+        id TEXT PRIMARY KEY)""")
+    connection.execute("""CREATE TABLE IF NOT EXISTS reviai_editor_library (
+        user_id TEXT NOT NULL REFERENCES reviai_study_editors(id) ON DELETE CASCADE,
+        item_id TEXT NOT NULL, payload TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 1,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, item_id))""")
+    connection.execute("""CREATE TABLE IF NOT EXISTS reviai_editor_study_folders (
+        user_id TEXT NOT NULL REFERENCES reviai_study_editors(id) ON DELETE CASCADE,
+        id TEXT NOT NULL, name TEXT NOT NULL,
+        PRIMARY KEY (user_id, id), UNIQUE (user_id, name))""")
+
+
+def library_tables(owner):
+    # Noms SQL constants : aucun nom de table ne vient de la requête.
+    if owner.get("editor"):
+        return "reviai_editor_library", "reviai_editor_study_folders", "reviai_study_editors"
+    return "reviai_library", "reviai_study_folders", "reviai_accounts"
+
+
+def lock_library(connection, owner):
+    _, _, owners = library_tables(owner)
+    if owner.get("editor"):
+        connection.execute("INSERT INTO reviai_study_editors (id) VALUES (%s) ON CONFLICT (id) DO NOTHING", (owner["id"],))
+    connection.execute(f"SELECT id FROM {owners} WHERE id = %s FOR UPDATE", (owner["id"],)).fetchone()
 
 
 def clean_item(raw, item_id):
@@ -76,6 +102,10 @@ def clean_item(raw, item_id):
 
 def register_study_routes(app, core):
     def account_required():
+        if core.ADMIN_PASSWORD and session.get("admin_authenticated"):
+            if request.method != "GET" and not core.valid_admin_csrf(request.headers.get("X-CSRF-Token", "")):
+                return None, (jsonify(error="Session expirée. Recharge la page."), 400)
+            return {"id": "editor", "editor": True}, None
         account = core.billing_account(session.get("user_id"))
         if not account or not account["email_verified"]:
             return None, (jsonify(error="Connecte-toi avec un compte confirmé pour retrouver ta bibliothèque."), 401)
@@ -85,22 +115,24 @@ def register_study_routes(app, core):
 
     @app.route("/api/library", methods=["GET", "DELETE"])
     def study_library():
-        if not session.get("user_id") and request.method == "GET":
+        if not session.get("user_id") and not session.get("admin_authenticated") and request.method == "GET":
             return jsonify(authenticated=False, items=[], folders=[])
         account, error = account_required()
         if error:
             return error
+        items_table, folders_table, _ = library_tables(account)
         try:
             with core.feedback_database_connection() as connection:
                 ensure_study_tables(connection, core)
                 if request.method == "DELETE":
-                    connection.execute("SELECT id FROM reviai_accounts WHERE id = %s FOR UPDATE", (account["id"],)).fetchone()
-                    connection.execute("DELETE FROM reviai_library WHERE user_id = %s", (account["id"],))
-                    connection.execute("DELETE FROM reviai_study_folders WHERE user_id = %s", (account["id"],))
+                    lock_library(connection, account)
+                    connection.execute(f"DELETE FROM {items_table} WHERE user_id = %s", (account["id"],))
+                    connection.execute(f"DELETE FROM {folders_table} WHERE user_id = %s", (account["id"],))
                     return jsonify(success=True)
-                rows = connection.execute("SELECT payload, version FROM reviai_library WHERE user_id = %s ORDER BY updated_at DESC", (account["id"],)).fetchall()
-                folders = connection.execute("SELECT id, name FROM reviai_study_folders WHERE user_id = %s ORDER BY name", (account["id"],)).fetchall()
-            return jsonify(authenticated=True, account_id=account["id"], csrf_token=core.account_csrf_token(),
+                rows = connection.execute(f"SELECT payload, version FROM {items_table} WHERE user_id = %s ORDER BY updated_at DESC", (account["id"],)).fetchall()
+                folders = connection.execute(f"SELECT id, name FROM {folders_table} WHERE user_id = %s ORDER BY name", (account["id"],)).fetchall()
+            return jsonify(authenticated=True, account_id=account["id"], library_mode="editor" if account.get("editor") else "account",
+                csrf_token=core.admin_csrf_token() if account.get("editor") else core.account_csrf_token(),
                 items=[{**json.loads(row[0]), "version": row[1]} for row in rows],
                 folders=[{"id": row[0], "name": row[1]} for row in folders], limit=MAX_ITEMS)
         except Exception:
@@ -112,6 +144,7 @@ def register_study_routes(app, core):
         account, error = account_required()
         if error:
             return error
+        items_table, folders_table, _ = library_tables(account)
         if not re.fullmatch(r"[a-zA-Z0-9_-]{1,100}", item_id):
             return jsonify(error="Identifiant invalide."), 400
         payload = request.get_json(silent=True)
@@ -122,19 +155,19 @@ def register_study_routes(app, core):
             with core.feedback_database_connection() as connection:
                 ensure_study_tables(connection, core)
                 # Verrou du compte : limite et modification atomiques, même entre appareils.
-                connection.execute("SELECT id FROM reviai_accounts WHERE id = %s FOR UPDATE", (account["id"],)).fetchone()
-                row = connection.execute("SELECT version FROM reviai_library WHERE user_id = %s AND item_id = %s", (account["id"], item_id)).fetchone()
+                lock_library(connection, account)
+                row = connection.execute(f"SELECT version FROM {items_table} WHERE user_id = %s AND item_id = %s", (account["id"], item_id)).fetchone()
                 version = row[0] if row else 0
                 if version != payload["expected_version"]:
                     return jsonify(error="Cet élément a changé sur un autre appareil. Recharge la bibliothèque avant de le modifier."), 409
                 if request.method == "DELETE":
-                    connection.execute("DELETE FROM reviai_library WHERE user_id = %s AND item_id = %s", (account["id"], item_id))
+                    connection.execute(f"DELETE FROM {items_table} WHERE user_id = %s AND item_id = %s", (account["id"], item_id))
                     return jsonify(success=True)
-                if item["folder"] and not connection.execute("SELECT id FROM reviai_study_folders WHERE user_id = %s AND id = %s", (account["id"], item["folder"])).fetchone():
+                if item["folder"] and not connection.execute(f"SELECT id FROM {folders_table} WHERE user_id = %s AND id = %s", (account["id"], item["folder"])).fetchone():
                     raise ValueError("Ce dossier n’existe plus. Recharge ta bibliothèque.")
-                if not row and connection.execute("SELECT COUNT(*) FROM reviai_library WHERE user_id = %s", (account["id"],)).fetchone()[0] >= MAX_ITEMS:
+                if not row and connection.execute(f"SELECT COUNT(*) FROM {items_table} WHERE user_id = %s", (account["id"],)).fetchone()[0] >= MAX_ITEMS:
                     return jsonify(error=f"Ta bibliothèque contient déjà {MAX_ITEMS} éléments. Supprime ceux dont tu n’as plus besoin."), 409
-                connection.execute("""INSERT INTO reviai_library (user_id, item_id, payload, version)
+                connection.execute(f"""INSERT INTO {items_table} (user_id, item_id, payload, version)
                     VALUES (%s, %s, %s, %s) ON CONFLICT (user_id, item_id) DO UPDATE
                     SET payload = EXCLUDED.payload, version = EXCLUDED.version, updated_at = CURRENT_TIMESTAMP""",
                     (account["id"], item_id, json.dumps(item, ensure_ascii=False), version + 1))
@@ -150,6 +183,7 @@ def register_study_routes(app, core):
         account, error = account_required()
         if error:
             return error
+        _, folders_table, _ = library_tables(account)
         payload = request.get_json(silent=True)
         name = str(payload.get("name", "")).strip() if isinstance(payload, dict) else ""
         if not name or len(name) > 80:
@@ -157,14 +191,14 @@ def register_study_routes(app, core):
         try:
             with core.feedback_database_connection() as connection:
                 ensure_study_tables(connection, core)
-                connection.execute("SELECT id FROM reviai_accounts WHERE id = %s FOR UPDATE", (account["id"],)).fetchone()
-                existing = connection.execute("SELECT id FROM reviai_study_folders WHERE user_id = %s AND name = %s", (account["id"], name)).fetchone()
+                lock_library(connection, account)
+                existing = connection.execute(f"SELECT id FROM {folders_table} WHERE user_id = %s AND name = %s", (account["id"], name)).fetchone()
                 if existing:
                     return jsonify(folder={"id": existing[0], "name": name})
-                if connection.execute("SELECT COUNT(*) FROM reviai_study_folders WHERE user_id = %s", (account["id"],)).fetchone()[0] >= 50:
+                if connection.execute(f"SELECT COUNT(*) FROM {folders_table} WHERE user_id = %s", (account["id"],)).fetchone()[0] >= 50:
                     return jsonify(error="Tu peux créer jusqu’à 50 dossiers."), 409
                 folder_id = core.make_id()
-                connection.execute("INSERT INTO reviai_study_folders (user_id, id, name) VALUES (%s, %s, %s)", (account["id"], folder_id, name))
+                connection.execute(f"INSERT INTO {folders_table} (user_id, id, name) VALUES (%s, %s, %s)", (account["id"], folder_id, name))
             return jsonify(folder={"id": folder_id, "name": name})
         except Exception:
             app.logger.exception("Création du dossier impossible.")

@@ -3,6 +3,8 @@
     "use strict";
     const el = id => document.getElementById(id);
     const cloud = document.body.dataset.accountSignedIn === "true";
+    const editor = document.body.dataset.libraryMode === "editor";
+    const storageName = editor ? "ton espace éditeur" : "ton compte";
     const folderKey = "reviai-folders-v1";
     const localItems = () => {
         try { const rows = JSON.parse(localStorage.getItem(LIBRARY_STORAGE_KEY) || "[]"); return Array.isArray(rows) ? rows.filter(x => x && typeof x === "object") : []; }
@@ -43,24 +45,52 @@
         select.replaceChildren(new Option("Tous les dossiers", "all"), new Option("Sans dossier", ""));
         for (const folder of study.folders) select.add(new Option(folder.name, folder.id));
         select.value = [...select.options].some(option => option.value === value) ? value : "all";
+        syncSaveFolders();
     }
+    function syncSaveFolders() {
+        for (const [key, value] of [["revisionSaveFolder", currentRevisionFolder], ["exerciseSaveFolder", currentExerciseFolder]]) {
+            const select = el(key);
+            select.replaceChildren(new Option("Sans dossier", ""));
+            for (const folder of study.folders) select.add(new Option(folder.name, folder.id));
+            // Conserver le choix même pendant un chargement ou une erreur de synchronisation.
+            if (value && !study.folders.some(folder => folder.id === value)) select.add(new Option("Dossier à actualiser", value));
+            select.value = value || "";
+        }
+    }
+    study.syncSaveFolders = syncSaveFolders;
+    function chooseNewItemFolder() {
+        const folder = el("libraryFolderFilter").value;
+        if (folder === "all") return;
+        // Un filtre ne doit pas déplacer une fiche déjà enregistrée.
+        if (!study.items.some(item => item.id === currentRevisionLibraryId)) currentRevisionFolder = folder;
+        if (!study.items.some(item => item.id === currentExerciseLibraryId)) currentExerciseFolder = folder;
+        syncSaveFolders();
+    }
+    el("revisionSaveFolder").addEventListener("change", () => {
+        currentRevisionFolder = el("revisionSaveFolder").value;
+        saveRevisionButton.textContent = "＋ Enregistrer";
+    });
+    el("exerciseSaveFolder").addEventListener("change", () => {
+        currentExerciseFolder = el("exerciseSaveFolder").value;
+        saveExerciseButton.textContent = "＋ Enregistrer";
+    });
     async function refresh() {
         if (pending) { notice("Un enregistrement est en cours…"); return; }
         if (!cloud) { study.items = localItems(); study.folders = localFolders(); renderFolders(); renderLibrary(); return; }
         const revision = ++refreshRevision;
         el("refreshLibraryButton").disabled = true;
-        notice("Chargement de la bibliothèque du compte…");
+        notice(`Chargement de la bibliothèque de ${storageName}…`);
         try {
             const data = await api("/api/library");
             if (revision !== refreshRevision) return;
             if (!data.authenticated) throw new Error("Ta session a expiré. Connecte-toi à nouveau avant d’enregistrer.");
-            if (data.account_id !== document.body.dataset.accountId) { study.ready = false; window.location.reload(); return; }
+            if (data.account_id !== document.body.dataset.accountId || data.library_mode !== document.body.dataset.libraryMode) { study.ready = false; window.location.reload(); return; }
             csrf = data.csrf_token;
             study.items = data.items;
             study.folders = data.folders;
             study.ready = true;
             renderFolders(); renderLibrary();
-            notice("Bibliothèque du compte à jour · jusqu’à 200 éléments et 50 dossiers.");
+            notice(`Bibliothèque de ${storageName} à jour · jusqu’à 200 éléments et 50 dossiers.`);
         } catch (error) { if (revision === refreshRevision) { study.ready = false; notice(error.message, true); } }
         finally { el("refreshLibraryButton").disabled = false; }
     }
@@ -81,7 +111,7 @@
             catch { throw new Error("Le stockage de ce navigateur est plein. Libère de la place ou utilise un compte."); }
         }
         study.items = [saved, ...study.items.filter(entry => entry.id !== saved.id)];
-        renderLibrary(); notice(cloud ? "Enregistré dans ton compte ✓" : "Enregistré dans ce navigateur ✓");
+        renderLibrary(); notice(cloud ? `Enregistré dans ${storageName} ✓` : "Enregistré dans ce navigateur ✓");
         return saved;
     }
     study.save = (type, title, content, itemId, score, total, extra = {}) => serialize(async () => {
@@ -131,6 +161,7 @@
                 const saved = await persist({...item, folder: select.value, updatedAt: new Date().toISOString()});
                 if (currentRevisionLibraryId === item.id) currentRevisionFolder = saved.folder;
                 if (currentExerciseLibraryId === item.id) currentExerciseFolder = saved.folder;
+                syncSaveFolders();
                 if (deck?.id === item.id) deck = clone(saved);
             } catch (error) { select.value = item.folder || ""; throw error; }
             finally { select.disabled = false; }
@@ -182,22 +213,23 @@
     }
     el("createFolderButton").addEventListener("click", () => {
         const name = prompt("Nom du dossier ou de la matière (ex. Maths — Terminale)");
-        if (name?.trim()) serialize(async () => { const folder = await createFolder(name); el("libraryFolderFilter").value = folder.id; renderLibrary(); });
+        if (name?.trim()) serialize(async () => { const folder = await createFolder(name); el("libraryFolderFilter").value = folder.id; chooseNewItemFolder(); renderLibrary(); });
     });
-    el("libraryFolderFilter").addEventListener("change", renderLibrary);
+    el("libraryFolderFilter").addEventListener("change", () => { chooseNewItemFolder(); renderLibrary(); });
     el("librarySearch").addEventListener("input", renderLibrary);
     el("refreshLibraryButton").addEventListener("click", refresh);
     libraryToggleButton.addEventListener("click", () => { if (!libraryPanel.classList.contains("hidden")) refresh(); });
-    el("importLocalLibraryButton").classList.toggle("hidden", !cloud || !localItems().length);
+    el("importLocalLibraryButton").classList.toggle("hidden", !cloud || (!localItems().length && !localFolders().length));
+    el("importLocalLibraryButton").textContent = "Récupérer les anciennes révisions de ce navigateur";
     el("importLocalLibraryButton").addEventListener("click", () => serialize(async () => {
         requireReady();
-        if (!confirm("Copier la bibliothèque de ce navigateur dans ton compte connecté ? Vérifie qu’elle t’appartient. Tes éléments déjà enregistrés dans le compte seront conservés.")) return;
+        if (!confirm(`Copier la bibliothèque de ce navigateur dans ${storageName} ? Vérifie qu’elle t’appartient. Les éléments déjà enregistrés en ligne seront conservés.`)) return;
         const mapping = new Map();
         for (const folder of localFolders()) mapping.set(folder.id, (await createFolder(folder.name)).id);
         let imported = 0;
         for (const item of localItems()) {
             if (study.items.some(existing => existing.id === item.id)) continue;
-            await persist({...item, id: /^[a-zA-Z0-9_-]{1,100}$/.test(item.id) ? item.id : id("import"), folder: mapping.get(item.folder) || ""}); imported += 1;
+            await persist({...item, id: /^[a-zA-Z0-9_-]{1,100}$/.test(item.id) ? item.id : id("import"), version: 0, folder: mapping.get(item.folder) || ""}); imported += 1;
         }
         notice(`${imported} élément(s) importé(s). Les originaux restent dans ce navigateur.`);
     }));
@@ -207,6 +239,7 @@
         if (!item.sourceContent) { alert("Ouvre la fiche d’origine pour retravailler ce quiz."); return; }
         currentRevisionText = item.sourceContent; currentRevisionTitle = String(item.title || "Révision").replace(/^Résultat du quiz — /, "");
         currentRevisionLibraryId = item.sourceId || ""; currentRevisionFolder = item.folder || ""; sessionId = "";
+        syncSaveFolders();
         resultContent.innerHTML = markdownToHtml(currentRevisionText); resultCard.classList.remove("hidden");
         loadQuiz({focus: mistakes(item.questions).map(q => `${q.question}\nExplication : ${q.explanation}`)});
     }
@@ -259,7 +292,7 @@
         if (!next) return false;
         const saved = await study.save("flashcards", next.title, "", next.id, null, null, {cards:next.cards, folder:next.folder, sourceId:next.sourceId || "", version:next.version || 0});
         if (saved && deck?.id === next.id) deck = clone(saved);
-        if (deck?.id === next.id) cardNotice(saved ? (cloud ? "Jeu et progression enregistrés dans ton compte ✓" : "Jeu et progression enregistrés dans ce navigateur ✓") : "L’enregistrement a échoué. Ta progression reste affichée ; réessaie.", !saved);
+        if (deck?.id === next.id) cardNotice(saved ? (cloud ? `Jeu et progression enregistrés dans ${storageName} ✓` : "Jeu et progression enregistrés dans ce navigateur ✓") : "L’enregistrement a échoué. Ta progression reste affichée ; réessaie.", !saved);
         return saved;
     }
     el("saveDeckButton").addEventListener("click", async () => {
@@ -324,7 +357,11 @@
         exerciseChatInput.placeholder = guided.checked ? "Écris ton essai ou l’étape qui te bloque…" : "Exemple : pourquoi as-tu utilisé cette formule ?";
     });
     exerciseHelpMode.addEventListener("change", () => { guided.checked = exerciseHelpMode.value !== "complete"; });
-    el("libraryStorageNote").textContent = cloud ? "Tes fiches, exercices, cartes et quiz sont enregistrés dans ton compte et accessibles sur tes autres appareils après connexion." : "Tes révisions restent dans ce navigateur. Crée un compte gratuit pour les retrouver sur tes autres appareils.";
+    el("libraryStorageNote").textContent = editor
+        ? "La bibliothèque de l’éditeur est sauvegardée en ligne. Connecte-toi à l’espace éditeur sur tes autres appareils pour la retrouver. Pour tes anciennes fiches, utilise le bouton de récupération dans leur navigateur d’origine."
+        : cloud ? "Tes fiches, exercices, cartes et quiz enregistrés sont accessibles sur tes autres appareils après connexion au même compte."
+        : "Tes révisions restent dans ce navigateur. Crée un compte gratuit pour les retrouver sur tes autres appareils.";
     renderFolders(); renderLibrary(); if (cloud) refresh();
     window.addEventListener("storage", event => { if (!cloud && [LIBRARY_STORAGE_KEY,folderKey].includes(event.key)) refresh(); });
+    window.addEventListener("focus", () => { if (cloud && !pending && !libraryPanel.classList.contains("hidden")) refresh(); });
 })();

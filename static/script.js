@@ -450,6 +450,7 @@ function openLibraryItem(item) {
         currentExerciseTitle = String(item.title || "Exercice expliqué");
         currentExerciseLibraryId = String(item.id || "");
         currentExerciseFolder = item.folder || "";
+        window.ReviStudy?.syncSaveFolders();
         currentExerciseText = String(item.content || "");
         document.getElementById("exerciseResultTitle").textContent = "Ton exercice enregistré";
         exerciseSessionId = "";
@@ -468,6 +469,7 @@ function openLibraryItem(item) {
         currentRevisionTitle = String(item.title || "Fiche de révision");
         currentRevisionLibraryId = String(item.id || "");
         currentRevisionFolder = item.folder || "";
+        window.ReviStudy?.syncSaveFolders();
         quizButton.disabled = !currentRevisionText.trim();
         saveRevisionButton.textContent = "＋ Enregistrer";
         resultContent.innerHTML = markdownToHtml(item.content || "");
@@ -539,6 +541,7 @@ libraryList.addEventListener("click", async event => {
 });
 
 saveRevisionButton.addEventListener("click", async () => {
+    currentRevisionFolder = document.getElementById("revisionSaveFolder").value;
     saveRevisionButton.disabled = true;
     const saved = await saveLibraryItem("revision", currentRevisionTitle, currentRevisionText || resultContent.innerText, currentRevisionLibraryId, null, null, {folder: currentRevisionFolder});
     saveRevisionButton.disabled = false;
@@ -551,6 +554,7 @@ saveRevisionButton.addEventListener("click", async () => {
 });
 
 saveExerciseButton.addEventListener("click", async () => {
+    currentExerciseFolder = document.getElementById("exerciseSaveFolder").value;
     saveExerciseButton.disabled = true;
     const saved = await saveLibraryItem("exercise", currentExerciseTitle, currentExerciseText || exerciseSolutionContent.innerText, currentExerciseLibraryId, null, null, {folder: currentExerciseFolder});
     saveExerciseButton.disabled = false;
@@ -811,6 +815,7 @@ form.addEventListener("submit", async event => {
         currentRevisionLibraryId = sessionId ? `revision-${sessionId}` : `revision-${Date.now()}`;
         currentRevisionText = content;
         currentRevisionFolder = window.ReviStudy && document.getElementById("libraryFolderFilter").value !== "all" ? document.getElementById("libraryFolderFilter").value : "";
+        window.ReviStudy?.syncSaveFolders();
         quizButton.disabled = false;
         saveRevisionButton.textContent = "＋ Enregistrer";
 
@@ -1673,6 +1678,7 @@ exerciseForm.addEventListener("submit", async event => {
         currentExerciseText = solution;
         document.getElementById("exerciseResultTitle").textContent = requestedHelpMode === "complete" ? "La solution expliquée" : "À toi d’essayer";
         currentExerciseFolder = window.ReviStudy && document.getElementById("libraryFolderFilter").value !== "all" ? document.getElementById("libraryFolderFilter").value : "";
+        window.ReviStudy?.syncSaveFolders();
         saveExerciseButton.textContent = "＋ Enregistrer";
         exerciseSolutionContent.innerHTML = markdownToHtml(solution);
         savedExerciseNotice.classList.add("hidden");

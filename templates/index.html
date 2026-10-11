@@ -8,7 +8,7 @@
     <title>RéviAI — Révisions et exercices avec l'IA</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body data-account-signed-in="{{ 'true' if account_signed_in else 'false' }}" data-account-id="{{ session.get('user_id', '') }}">
+<body data-account-signed-in="{{ 'true' if account_signed_in or admin_signed_in else 'false' }}" data-account-id="{{ 'editor' if admin_signed_in else session.get('user_id', '') }}" data-library-mode="{{ 'editor' if admin_signed_in else 'account' if account_signed_in else 'local' }}">
     <div class="page-glow glow-a"></div>
     <div class="page-glow glow-b"></div>
 
@@ -198,6 +198,7 @@
                     <p>Relis les étapes et vérifie comment le résultat a été obtenu.</p>
                 </div>
                 <div class="section-actions">
+                    <label class="library-folder-label" for="exerciseSaveFolder">Enregistrer dans<select id="exerciseSaveFolder"><option value="">Sans dossier</option></select></label>
                     <button id="saveExerciseButton" class="button button-secondary" type="button">＋ Enregistrer</button>
                     <button id="copyExerciseButton" class="button button-secondary" type="button">Copier</button>
                     <button id="exportExerciseButton" class="button button-secondary" type="button">Exporter en PDF</button>
@@ -256,6 +257,7 @@
                     <p>Structure claire, informations importantes et mise en forme.</p>
                 </div>
                 <div class="section-actions">
+                    <label class="library-folder-label" for="revisionSaveFolder">Enregistrer dans<select id="revisionSaveFolder"><option value="">Sans dossier</option></select></label>
                     <button id="saveRevisionButton" class="button button-secondary" type="button">＋ Enregistrer</button>
                     <button id="copyButton" class="button button-secondary" type="button">Copier</button>
                     <button id="exportRevisionButton" class="button button-secondary" type="button">Exporter en PDF</button>
@@ -339,7 +341,7 @@
         <a href="/privacy">Confidentialité</a>
     </footer>
 
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
-    <script src="{{ url_for('static', filename='study.js') }}"></script>
+    <script src="{{ url_for('static', filename='script.js', v='library-editor-2') }}"></script>
+    <script src="{{ url_for('static', filename='study.js', v='library-editor-2') }}"></script>
 </body>
 </html>

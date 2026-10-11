@@ -1,5 +1,15 @@
 # Vérification de RéviAI — 11 octobre 2026
 
+## Correction de la bibliothèque éditeur et du choix du dossier
+
+Cause identifiée dans le code : une connexion éditeur ne comporte pas de `user_id` élève ; l’interface utilisait donc le stockage local du navigateur. Les routes de bibliothèque et l’interface reconnaissent désormais la session éditeur et utilisent une bibliothèque PostgreSQL distincte. Ses tables sont créées automatiquement dans `DATABASE_URL`, sans nouveau service. Les anciennes données locales peuvent être récupérées volontairement depuis chaque navigateur d’origine.
+
+Le dossier des nouvelles fiches et corrections était mémorisé trop tôt, avant une éventuelle sélection de matière. Un choix « Enregistrer dans » explicite est maintenant lu au moment d’enregistrer. Créer ou sélectionner un dossier le propose pour les nouveaux contenus, tout en conservant le dossier des éléments déjà enregistrés. Les scripts portent une nouvelle version dans leur URL pour éviter de charger une ancienne copie après publication.
+
+Cette correction est locale : publier `study.py`, `static/script.js`, `static/study.js` et `templates/index.html`. La synchronisation en production avec une session éditeur et la création réelle des tables Neon restent à confirmer après déploiement. Aucun test fonctionnel n’a été ajouté ou exécuté pour cette correction.
+
+Contrôles statiques effectués : syntaxe Python de `study.py`, syntaxe Jinja de `templates/index.html` et syntaxe JavaScript des deux scripts valides.
+
 ## Ajouts postérieurs : bibliothèque, entraînement et abonnements
 
 Les six améliorations sont implémentées localement : bibliothèque liée au compte et dossiers, cartes avec rappels espacés, aide guidée, quiz ciblés sur les erreurs, export A4 via l’enregistrement PDF du navigateur et page privée `/admin/abonnements`.
