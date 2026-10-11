@@ -467,6 +467,7 @@ def apply_subscription_update(subscription):
                     WHERE id = %s""",
                 (customer_id, subscription_id, status, period_end_at, cancel_at_period_end, user_id),
             )
+        site_analytics.subscription_activated(user_id, subscription)
         return True
     except Exception:
         app.logger.exception("Impossible de mettre à jour l'abonnement reçu de Stripe.")
@@ -545,6 +546,8 @@ def process_stripe_event(event):
                             WHERE id = %s""",
                         (customer_id, subscription_id, status, period_end_at, cancel_at_period_end, user_id),
                     )
+        if subscription is not None and user_id:
+            site_analytics.subscription_activated(user_id, subscription)
         return True
     except Exception:
         app.logger.exception("Traitement d'un événement Stripe impossible.")
@@ -914,7 +917,7 @@ def uploaded_mime_from_extension(extension):
     }.get(str(extension).lower(), "image/jpeg")
 
 
-def process_generation(job_id, saved_files):
+def process_generation(job_id, saved_files, stats_visitor=None):
     temp_paths = [item[0] for item in saved_files]
     try:
         set_job(job_id, status="reading", message="Lecture des fichiers…")
@@ -1004,6 +1007,7 @@ def process_generation(job_id, saved_files):
             },
         )
 
+        site_analytics.completed_sheet(stats_visitor, job_id)
     except Exception as exc:
         set_job(job_id, status="error", message=str(exc))
     finally:
@@ -1578,6 +1582,7 @@ def register_account():
                                 VALUES (%s, %s, %s, CURRENT_TIMESTAMP, %s)""",
                             (account_id, email, generate_password_hash(password), TERMS_VERSION),
                         )
+                    site_analytics.milestone("signed_up_at", account_id)
                     if send_verification_email(account_id, email):
                         return render_template("account_message.html", title="Vérifie ton adresse e-mail", message="Nous venons d’envoyer un lien de confirmation valable 24 heures. Clique dessus avant de te connecter.", resend=True, csrf_token=account_csrf_token())
                     error = "Le compte a été créé, mais l’e-mail n’a pas pu être envoyé. Vérifie la configuration e-mail puis demande un nouvel envoi depuis la connexion."
@@ -1653,6 +1658,7 @@ def verify_account():
         row = None
     if not row:
         return render_template("account_message.html", title="Lien invalide", message="Ce lien est invalide ou a expiré. Demande un nouvel e-mail de confirmation.", resend=True, csrf_token=account_csrf_token()), 400
+    site_analytics.account_verified(row[0])
     session.clear()
     session["user_id"] = row[0]
     session["account_csrf_token"] = secrets.token_urlsafe(32)
@@ -1855,6 +1861,8 @@ def start_subscription():
         else:
             checkout_args["customer_email"] = account["email"]
         checkout = stripe.checkout.Session.create(**checkout_args)
+        site_analytics.milestone("checkout_at", account["id"])
+        site_analytics.account_event(account["id"], "checkout_at")
         return redirect(checkout.url, code=303)
     except Exception:
         app.logger.exception("Création de paiement Plus impossible.")
@@ -2052,10 +2060,17 @@ def admin_analytics():
     if not session.get("admin_authenticated"):
         return redirect(url_for("admin_login"))
     metrics, metrics_error = recent_usage_metrics()
+    try:
+        days = int(request.args.get("days", "30"))
+    except ValueError:
+        days = 30
+    if days not in {7, 30, 90}:
+        days = 30
     return render_template(
         "admin_analytics.html",
         metrics=metrics,
         metrics_error=metrics_error,
+        dashboard=site_analytics.dashboard(days),
         csrf_token=admin_csrf_token(),
     )
 
@@ -2277,7 +2292,7 @@ def generate():
                 "result": None,
             }
 
-        EXECUTOR.submit(process_generation, job_id, saved_files)
+        EXECUTOR.submit(process_generation, job_id, saved_files, site_analytics.visitor())
 
         return jsonify({"success": True, "job_id": job_id})
 
@@ -2608,6 +2623,9 @@ def quiz():
 def too_large(_error):
     return jsonify({"error": f"Fichier trop volumineux. Maximum : {MAX_MB} Mo."}), 413
 
+
+from site_analytics import SiteAnalytics
+site_analytics = SiteAnalytics(app, sys.modules[__name__])
 
 from study import register_study_routes
 register_study_routes(app, sys.modules[__name__])

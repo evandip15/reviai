@@ -6,8 +6,8 @@
     <div class="admin-heading">
         <div>
             <p class="kicker editorial-kicker">ESPACE ÉDITEUR</p>
-            <h1>Utilisation de RéviAI</h1>
-            <p>Activités des 30 derniers jours, regroupées par jour et par fonction.</p>
+            <h1>Ce qui fait progresser RéviAI</h1>
+            <p>Inscriptions, fiches terminées, retours et passage à Plus.</p>
         </div>
         <div class="section-actions">
             <a class="button button-secondary" href="{{ url_for('admin_accounts') }}">Comptes et pass VIP</a>
@@ -20,6 +20,55 @@
         </div>
     </div>
 
+    <nav class="stats-periods" aria-label="Période des statistiques">
+        {% for days in [7, 30, 90] %}<a href="{{ url_for('admin_analytics', days=days) }}" {% if dashboard.days == days %}aria-current="page"{% endif %}>{{ days }} jours</a>{% endfor %}
+    </nav>
+    {% if dashboard.error %}<p class="admin-alert admin-alert-warning" role="status">{{ dashboard.error }}</p>{% endif %}
+    {% if dashboard.available %}
+    <div class="stats-card-grid">
+        {% for card in dashboard.cards %}<article class="stats-number-card"><h2>{{ card.label }}</h2><strong>{{ card.count }}</strong><p>{{ card.note }}</p></article>{% endfor %}
+    </div>
+
+    <section class="stats-section" aria-labelledby="statsJourneyTitle">
+        <h2 id="statsJourneyTitle">Les étapes des nouveaux visiteurs</h2>
+        <p>Navigateurs dont le suivi a commencé sur la période choisie, avec leur accord. Chaque ligne indique les étapes observées à ce jour pour ce même groupe.</p>
+        {% if dashboard.steps[0].count %}
+        <div class="admin-usage-table-wrap"><table class="admin-usage-table stats-steps">
+            <thead><tr><th>Étape observée</th><th>Navigateurs</th><th>Part du groupe</th></tr></thead>
+            <tbody>{% for step in dashboard.steps %}<tr>
+                <td>{{ step.label }}<div class="stats-track" aria-hidden="true"><span style="width: {{ step.percent }}%"></span></div></td>
+                <td>{{ step.count }}</td><td>{{ step.percent }} %</td>
+            </tr>{% endfor %}</tbody>
+        </table></div>
+        {% else %}<div class="stats-empty"><p>Le suivi commence avec cette mise à jour. Les premiers parcours apparaîtront lorsque des visiteurs accepteront les statistiques.</p></div>{% endif %}
+        <p class="admin-usage-note">Les lignes sont indépendantes : on peut créer une fiche avant de s’inscrire. Un navigateur n’est pas forcément une personne. Un retour correspond à une visite un autre jour, en dates UTC. Les visites de l’éditeur sont exclues. Les résultats récents peuvent encore évoluer.</p>
+        <p class="admin-usage-note">La confirmation et l’activation Plus peuvent compléter le parcours d’une inscription mesurée même depuis un autre appareil. Les fiches et les retours restent propres au navigateur. L’activation Plus du parcours exclut les essais gratuits, les pass VIP et le mode test ; elle ne mesure pas un revenu.</p>
+    </section>
+
+    <section class="stats-section" aria-labelledby="statsActionsTitle">
+        <h2 id="statsActionsTitle">Les points à examiner</h2>
+        <div class="stats-observations">{% for item in dashboard.observations %}<p><strong>{{ item.count }}</strong><span>{{ item.text }}</span></p>{% endfor %}</div>
+        <p class="admin-usage-note">Une étape manquante n’est pas forcément un abandon : la personne peut revenir, utiliser un autre navigateur ou retirer son accord.</p>
+    </section>
+
+    <div class="stats-two-columns">
+        <section class="stats-section" aria-labelledby="statsVisitsTitle">
+            <h2 id="statsVisitsTitle">Navigateurs actifs par jour</h2>
+            <p>Avec accord, un seul comptage par navigateur et par jour.</p>
+            {% if dashboard.daily %}<div class="stats-daily" role="list">{% for day in dashboard.daily %}<div class="stats-day" role="listitem"><span>{{ day.date }}</span><div class="stats-track" aria-hidden="true"><span style="width: {{ day.width }}%"></span></div><strong>{{ day.count }}</strong></div>{% endfor %}</div>{% else %}<p>Pas encore de visite mesurée.</p>{% endif %}
+        </section>
+        <section class="stats-section" aria-labelledby="statsSourceTitle">
+            <h2 id="statsSourceTitle">D’où vient le groupe mesuré ?</h2>
+            <p>Origine au démarrage du suivi, lorsqu’elle est identifiable.</p>
+            {% if dashboard.sources %}<div class="admin-usage-table-wrap"><table class="admin-usage-table"><thead><tr><th>Origine</th><th>Navigateurs</th><th>Comptes</th><th>Plus réel</th></tr></thead><tbody>{% for row in dashboard.sources %}<tr><td>{{ row.label }}</td><td>{{ row.visitors }}</td><td>{{ row.signups }}</td><td>{{ row.plus }}</td></tr>{% endfor %}</tbody></table></div>{% else %}<p>Pas encore d’origine mesurée.</p>{% endif %}
+            <p class="admin-usage-note">Pour tes vidéos TikTok, utilise le lien <a href="{{ url_for('home') }}?utm_source=tiktok">{{ request.url_root.rstrip('/') }}/?utm_source=tiktok</a>. Les navigateurs peuvent masquer l’origine ; ces chiffres ne prouvent pas qu’une vidéo a causé un abonnement.</p>
+        </section>
+    </div>
+    {% endif %}
+
+    <section class="stats-section">
+    <h2>Compteurs des fonctions gratuites · 30 jours</h2>
+    <p>Demandes décomptées du quota gratuit. Elles peuvent inclure des traitements échoués et excluent les accès illimités. Ce tableau est distinct du suivi facultatif ci-dessus.</p>
     {% if metrics_error %}<p class="admin-alert admin-alert-warning">{{ metrics_error }}</p>{% endif %}
     {% if metrics %}
     <div class="admin-usage-table-wrap">
@@ -44,6 +93,7 @@
         <p>Les nombres apparaîtront quand les élèves utiliseront les fiches, les exercices, le chat ou les quiz.</p>
     </div>
     {% endif %}
-    <p class="admin-usage-note">Ces statistiques ne contiennent ni nom, ni adresse e-mail, ni adresse IP. Les compteurs sont supprimés après 90 jours.</p>
+    </section>
+    <p class="admin-usage-note">Ce tableau n’affiche ni e-mail, ni adresse IP, ni contenu de cours. Le suivi facultatif conserve des identifiants pseudonymes et les étapes de parcours pendant 90 jours au maximum. Il n’est pas rétroactif et ne couvre pas les visiteurs qui refusent. Les données de comptes et d’abonnements proviennent de la gestion du service.</p>
 </section>
 {% endblock %}

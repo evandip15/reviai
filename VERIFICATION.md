@@ -80,6 +80,12 @@ Aucun paiement, envoi d’e-mail à une personne, création de compte réel ou c
 
 ## Rejouer les vérifications
 
+### Ajout du tableau de suivi · 11 octobre 2026
+
+Contrôles statiques effectués après cette modification : analyse de syntaxe de `app.py` et `site_analytics.py`, analyse des 19 modèles HTML avec Jinja, contrôle de syntaxe JavaScript de `static/analytics.js`. Aucune suite de tests fonctionnels n’a été lancée pour cette demande. Aucune connexion à Neon, modification de Render, notification Stripe ou publication GitHub n’a été réalisée. Les parcours de consentement, la création des tables et les nouveaux compteurs n’ont pas été validés sur le site en ligne. Les résultats des anciennes vérifications ci-dessus ne valident pas cette nouvelle fonction.
+
+Le suivi des visites démarre après déploiement et accord des visiteurs. Les fiches sont comptées seulement après succès de la génération. L’activation du parcours exige un abonnement `active` lu chez Stripe avec `livemode=true`. Le tableau des accès Plus actuellement actifs est distinct et inclut les essais et les tests connus ; il ne mesure pas un revenu.
+
 Après installation des dépendances de production, les tests de documents utilisent aussi `reportlab` (dépendance de test uniquement) :
 
 ```text

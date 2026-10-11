@@ -21,6 +21,25 @@
 - Sitemap et robots.txt générés à partir du domaine public configuré.
 - Publicités désactivées par défaut et réservées aux pages de guides.
 
+## Tableau de suivi dans l’espace éditeur
+
+Après connexion à `/admin`, ouvrir **Statistiques** (`/admin/statistiques`). Choisir 7, 30 ou 90 jours pour voir :
+
+- Les comptes créés et confirmés, les accès Plus actuellement actifs et les résiliations programmées, à partir de la base de gestion du service.
+- Les navigateurs actifs et les fiches réellement terminées, uniquement avec accord. Les essais gratuits décomptés restent dans un tableau distinct sur 30 jours.
+- Les étapes des navigateurs dont le suivi commence sur la période : inscription, confirmation, première fiche, consultation de Plus, ouverture de Stripe, activation réelle de Plus et retour un autre jour.
+- Les origines simplifiées et des pistes d’amélioration pour les parcours incomplets. Pour TikTok, partager `https://reviai.onrender.com/?utm_source=tiktok`.
+
+Le suivi commence à cette version : aucun ancien parcours n’est reconstitué. Les lignes d’étapes sont indépendantes et ne constituent pas un entonnoir strict ; une fiche peut précéder l’inscription. Les pourcentages portent sur un même groupe de nouveaux navigateurs ayant accepté. Un navigateur n’est pas une personne ; les retours sont mesurés sur des jours UTC différents. Les fiches et visites ne sont pas réunies entre appareils. Les confirmations et activations peuvent compléter un parcours associé au compte. Les paiements ouverts sans activation observée peuvent correspondre à des utilisateurs revenant plus tard, à des essais ou à des paiements de test.
+
+`site_analytics.py` crée automatiquement `reviai_stats_visitors`, `reviai_stats_visits` et `reviai_stats_sheets` dans la base `DATABASE_URL` existante. Aucune nouvelle variable Render, dépendance ou service externe n’est nécessaire. Le rôle PostgreSQL doit pouvoir créer les tables et les index. La table des comptes doit également rester disponible pour ce tableau. Une panne des statistiques ne bloque pas les outils, les comptes ni les notifications Stripe.
+
+Le composant `templates/analytics_consent.html` et `static/analytics.js` demandent un accord facultatif avant le suivi des visites. Le cookie signé `reviai_stats` est distinct du cookie de quota gratuit. Le choix se modifie en bas de page. Refuser supprime le parcours de ce navigateur ; la suppression d’un compte supprime les parcours qui lui sont liés. Les données de suivi sont purgées après 90 jours depuis le début du parcours, au prochain accès. Les réponses HTML contenant un choix personnel ne sont pas mises en cache partagé. Les visites en mode éditeur sont exclues.
+
+Les fiches sont comptées côté serveur après une génération réussie, avec l’identifiant du traitement pour éviter les doublons. Les activations du parcours sont prises dans les objets d’abonnement lus chez Stripe, au retour authentifié ou via le webhook signé existant : uniquement statut `active` et `livemode=true`. Les renouvellements ne créent pas une deuxième première activation ; les essais, tests et pass VIP n’en créent pas. Ce compteur ne constitue pas un montant de revenus. Le tableau des accès Plus actuellement actifs est distinct et inclut, comme indiqué à l’écran, les essais et les abonnements de test connus.
+
+À publier ensemble : `app.py`, `site_analytics.py`, `static/analytics.js`, `static/style.css`, `templates/analytics_consent.html`, `templates/admin_analytics.html`, `templates/public_base.html`, `templates/index.html` et `templates/privacy.html`.
+
 ## Lancer localement
 
 ```bash

@@ -1,0 +1,19 @@
+{% if stats_available %}
+<div class="stats-settings">
+    <button type="button" id="statsSettings" class="stats-text-button" aria-controls="statsConsent" aria-expanded="{{ 'true' if stats_choice == 'pending' else 'false' }}">Choix des statistiques</button>
+</div>
+<section id="statsConsent" class="stats-consent" aria-labelledby="statsConsentTitle" data-choice="{{ stats_choice }}" data-csrf="{{ stats_csrf }}" {% if stats_choice != 'pending' %}hidden{% endif %}>
+    <div>
+        <h2 id="statsConsentTitle">Nous aider à améliorer RéviAI ?</h2>
+        <p>Avec ton accord, nous mesurons les visites, les retours et les étapes comme la création d’une fiche ou d’un compte. Aucun cours, e-mail ou numéro de carte n’est enregistré dans ces statistiques. Tu peux refuser et utiliser le site normalement.</p>
+        <p class="stats-consent-detail">Choix et suivi conservés au maximum 90 jours. Tu peux changer d’avis en bas de page. <a href="/privacy">En savoir plus</a>.</p>
+        <p id="statsConsentStatus" role="status" aria-live="polite"></p>
+    </div>
+    <div class="stats-consent-actions">
+        <button type="button" class="button button-secondary" data-stats-choice="declined">Refuser les statistiques</button>
+        <button type="button" class="button button-secondary" data-stats-choice="accepted">Accepter les statistiques</button>
+        <button type="button" id="statsConsentClose" class="stats-text-button" {% if stats_choice == 'pending' %}hidden{% endif %}>Fermer</button>
+    </div>
+</section>
+<script defer src="{{ url_for('static', filename='analytics.js', v='stats-1') }}"></script>
+{% endif %}
