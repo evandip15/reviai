@@ -353,7 +353,7 @@ function renderLibrary() {
         title.textContent = String(item.title || "Révision");
         const type = document.createElement("span");
         type.className = "library-type";
-        type.textContent = item.type === "exercise" ? "Exercice" : item.type === "quiz" ? "Quiz" : item.type === "flashcards" ? "Cartes" : "Fiche";
+        type.textContent = item.type === "exercise" ? "Exercice" : item.type === "quiz" ? "Quiz" : item.type === "flashcards" ? "Cartes" : item.type === "exam" ? "Contrôle blanc" : "Fiche";
         top.append(type, title);
         card.appendChild(top);
 
@@ -365,7 +365,9 @@ function renderLibrary() {
 
         const preview = document.createElement("p");
         preview.className = "library-preview";
-        preview.textContent = item.type === "quiz"
+        preview.textContent = item.type === "exam"
+            ? item.score === null ? "Bilan enregistré · certaines réponses sont à vérifier" : `Note indicative : ${Number(item.score).toLocaleString("fr-FR")} / 20`
+            : item.type === "quiz"
             ? `Résultat : ${Number(item.score || 0)} / ${Number(item.total || 0)}`
             : libraryTextPreview(item.content).slice(0, 240);
         card.appendChild(preview);
@@ -440,6 +442,17 @@ function libraryTextPreview(text) {
 
 function openLibraryItem(item) {
     if (window.ReviStudy) window.ReviStudy.opened(item);
+    if (item.type === "exam") {
+        const dialog = document.createElement("dialog"); dialog.className = "study-review-dialog";
+        const heading = document.createElement("h2"); heading.textContent = item.title || "Contrôle blanc";
+        const content = document.createElement("article"); content.className = "revision"; content.innerHTML = markdownToHtml(item.content || "");
+        const close = document.createElement("button"); close.type = "button"; close.className = "button button-secondary"; close.textContent = "Fermer";
+        close.addEventListener("click", () => dialog.close());
+        const pdf = document.createElement("button"); pdf.type = "button"; pdf.className = "button button-secondary"; pdf.textContent = "Exporter en PDF";
+        pdf.addEventListener("click", () => window.ReviStudy?.exportPdf(item.title, item.content));
+        dialog.append(heading, content, pdf, close); dialog.addEventListener("close", () => dialog.remove()); document.body.append(dialog); dialog.showModal();
+        return;
+    }
     if (item.type === "flashcards" && window.ReviStudy) {
         window.ReviStudy.openDeck(item);
         return;
@@ -498,6 +511,7 @@ async function refreshUsageSummary() {
             ["exercise", "exercices"],
             ["chat", "messages de suivi"],
             ["quiz", "quiz ou jeux de cartes"],
+            ["exam", "contrôles blancs"],
         ];
         usageSummary.textContent = `Aujourd’hui, il te reste ${labels.map(([key, label]) => {
             const item = limits[key] || {};

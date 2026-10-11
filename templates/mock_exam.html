@@ -1,0 +1,73 @@
+{% extends "public_base.html" %}
+{% block title %}Contrôle blanc avec correction — RéviAI{% endblock %}
+{% block meta_description %}Crée un contrôle blanc à partir de ton cours, réponds en temps limité et découvre une correction détaillée avec barème sur 20.{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', filename='exam.css', v='exam-1') }}">{% endblock %}
+{% block content %}
+<div id="examApp" class="exam-app" data-csrf="{{ exam_csrf }}" data-scope="{{ exam_scope }}" data-cloud="{{ 'true' if exam_cloud else 'false' }}" data-library-owner="{{ 'editor' if admin_signed_in else session.get('user_id', '') }}" data-max-mb="{{ max_upload_mb }}">
+    <section class="exam-hero">
+        <a class="back" href="/">← Mes outils de révision</a>
+        <span class="pill">NOUVEAU · ENTRAÎNE-TOI AVANT LE JOUR J</span>
+        <h1>Un contrôle blanc.<br><span>Un vrai point sur tes acquis.</span></h1>
+        <p>Ton cours devient un sujet sur 20. Rédige tes réponses ou photographie ta copie, puis découvre les points gagnés et les notions à retravailler.</p>
+        <div class="exam-benefits"><span>01 · Un sujet adapté</span><span>02 · À ton rythme, avec chrono</span><span>03 · Une correction expliquée</span></div>
+    </section>
+
+    <p id="examUsage" class="usage-summary" role="status">Chargement de ton accès…</p>
+    <p id="examStatus" class="status exam-status" role="status" aria-live="polite"></p>
+    <div id="examRecovery" class="exam-recovery" hidden><p>La connexion a été interrompue. Ta copie reste affichée.</p><button id="examReconnect" type="button" class="button button-secondary">Reprendre le suivi</button></div>
+
+    <section id="examSetup" class="card exam-card">
+        <div class="section-head"><div><span class="kicker">PRÉPARE TON ENTRAÎNEMENT</span><h2>Sur quoi porte ton contrôle ?</h2><p>Choisis un chapitre pour obtenir un sujet cohérent avec ton cours.</p></div></div>
+        <form id="examCreateForm">
+            <div class="exam-options">
+                <label>Matière ou thème <span class="field-help">Facultatif</span><input id="examTopic" name="topic" maxlength="120" placeholder="Ex. SVT — L’atmosphère terrestre"></label>
+                <label>Niveau<select id="examLevel" name="level"><option>Collège</option><option>Seconde</option><option>Première</option><option selected>Terminale</option><option>Études supérieures</option></select></label>
+                <label>Durée<select id="examDuration" name="duration"><option value="15">15 minutes · 4 questions</option><option value="30" selected>30 minutes · 6 questions</option><option value="45">45 minutes · 8 questions</option><option value="60">60 minutes · 8 questions</option><option value="90">90 minutes · 8 questions</option></select></label>
+            </div>
+            <div class="exam-library-source"><button id="examLoadLibrary" type="button" class="button button-secondary">Utiliser une fiche de ma bibliothèque</button><label id="examLibraryLabel" hidden>Choisir une fiche<select id="examLibrarySource"><option value="">Choisir une fiche…</option></select></label><p id="examLibraryStatus" class="field-help" role="status"></p></div>
+            <label class="exam-field" for="examCourse">Colle ton cours<textarea id="examCourse" name="course" rows="7" maxlength="60000" placeholder="Colle ici le chapitre à réviser, ou importe tes documents ci-dessous…"></textarea></label>
+            <div class="exam-upload"><label for="examCourseFiles"><strong>Ou importe tes documents de cours</strong><span>PDF, DOCX, ODT, PPTX, TXT, JPG, PNG ou WEBP · {{ max_upload_mb }} Mo au total</span></label><input id="examCourseFiles" type="file" multiple accept=".pdf,.docx,.odt,.pptx,.txt,.jpg,.jpeg,.png,.webp"><ul id="examCourseFileList" class="exam-file-list"></ul></div>
+            <p class="field-help">Si tu colles du texte et ajoutes des fichiers, les deux seront utilisés. Le cours peut contenir au maximum 60 000 caractères après lecture.</p>
+            <button id="examCreate" class="button button-primary" type="submit">Créer mon contrôle blanc →</button>
+            <p class="exam-small">La correction ne sera visible qu’après remise de ta copie. Le sujet est un entraînement généré par IA, à vérifier avec ton cours.</p>
+        </form>
+    </section>
+
+    <section id="examReady" class="card exam-card exam-ready" hidden>
+        <span class="kicker">TON SUJET EST PRÊT</span><h2 id="examReadyTitle"></h2>
+        <div class="exam-ready-chips"><span id="examReadyDuration"></span><span id="examReadyCount"></span><span>Barème · 20 points</span></div>
+        <p>Prépare une feuille ou réponds directement ici. Le chronomètre démarre uniquement quand tu cliques sur le bouton.</p>
+        <button id="examStart" class="button button-primary" type="button">Commencer mon contrôle</button>
+    </section>
+
+    <section id="examAttempt" class="card exam-card" hidden>
+        <div class="exam-attempt-heading"><div><span class="kicker">À TOI DE JOUER</span><h2 id="examAttemptTitle"></h2><p id="examInstructions" class="exam-prose"></p></div><div class="exam-clock"><small>Temps restant</small><strong id="examTimer" role="timer" aria-live="off">—</strong><span id="examTimeNotice"></span></div></div>
+        <div class="exam-attempt-tools"><p id="examProgressText"></p><button id="examPrintSubject" class="button button-secondary" type="button">Imprimer le sujet / PDF</button></div>
+        <progress id="examProgress" value="0" max="6" aria-label="Questions avec une réponse saisie"></progress>
+        <form id="examAnswerForm">
+            <div id="examQuestions"></div>
+            <section class="exam-copy-panel" aria-labelledby="examCopyTitle">
+                <h3 id="examCopyTitle">Tu as répondu sur papier ?</h3><p>Ajoute toutes les pages de ta copie dans l’ordre. Indique les numéros des questions sur ta feuille.</p>
+                <label for="examCopyFiles">Photos ou documents de ta copie · {{ max_upload_mb }} Mo au total</label><input id="examCopyFiles" type="file" multiple accept=".pdf,.docx,.odt,.pptx,.txt,.jpg,.jpeg,.png,.webp"><ul id="examCopyFileList" class="exam-file-list"></ul>
+                <button id="examReadCopy" class="button button-secondary" type="button">Lire ma copie</button><p id="examCopyStatus" class="field-help" role="status" aria-live="polite"></p>
+                <div id="examTranscriptPanel" hidden><label class="exam-field" for="examTranscript">Vérifie la transcription<textarea id="examTranscript" rows="9" maxlength="24000" placeholder="La transcription de tes pages apparaîtra ici. Corrige les signes, calculs et numéros mal lus."></textarea></label><label class="exam-review-check"><input id="examTranscriptReviewed" type="checkbox"><span>J’ai relu la transcription et corrigé les éventuelles erreurs de lecture.</span></label><p class="field-help">Tu peux aussi saisir tes réponses au-dessus. Évite d’envoyer deux versions contradictoires de la même réponse.</p></div>
+            </section>
+            <div class="exam-submit"><p>La remise de ta copie ouvre la correction et termine cet essai. Le dépassement du temps sera indiqué, sans retirer de points.</p><button id="examSubmit" class="button button-primary" type="submit">Rendre ma copie et voir la correction →</button></div>
+        </form>
+    </section>
+
+    <section id="examResults" class="card exam-card" hidden>
+        <div class="exam-result-heading"><div><span class="kicker">TON BILAN D’ENTRAÎNEMENT</span><h2 id="examResultTitle"></h2><p id="examResultTime"></p></div><div class="exam-grade"><small>Note indicative</small><strong id="examScore"></strong><span id="examPartialScore"></span></div></div>
+        <p class="exam-result-note">Cette estimation suit le barème du sujet. Elle peut contenir des erreurs et ne remplace pas la note d’un professeur. Une réponse illisible ou un barème incohérent peut empêcher l’attribution d’une note globale.</p>
+        <div class="exam-bilan"><section><h3>Tes points forts</h3><ul id="examStrengths"></ul></section><section><h3>Ta prochaine séance</h3><ul id="examNextSteps"></ul></section></div>
+        <div class="exam-result-tools"><button id="examCopyResult" class="button button-secondary" type="button">Copier le bilan</button><button id="examDownload" class="button button-secondary" type="button">Télécharger le bilan</button><button id="examPrintResult" class="button button-secondary" type="button">Exporter en PDF</button></div>
+        <div class="exam-save"><label for="examSaveFolder">Enregistrer dans<select id="examSaveFolder"><option value="">Sans dossier</option></select></label><button id="examSave" class="button button-primary" type="button">Enregistrer mon bilan</button><a href="/">Ouvrir ma bibliothèque →</a><p id="examSaveStatus" role="status" aria-live="polite"></p></div>
+        <details id="examCommonCopy" hidden><summary>Ma copie transcrite</summary><p id="examCommonCopyText" class="exam-prose"></p></details>
+        <div id="examCorrections"></div>
+    </section>
+
+    <div class="exam-bottom-actions"><button id="examNew" class="button button-secondary" type="button" hidden>Nouveau contrôle blanc</button><a href="/">Revenir aux fiches et exercices</a></div>
+    <p class="exam-session-note">Le contrôle en cours est temporaire : il expire après 3 heures et peut disparaître au redémarrage du serveur. Garde cet onglet ouvert et enregistre ton bilan à la fin. {% if exam_cloud %}Le bilan enregistré sera disponible dans ta bibliothèque sur tes autres appareils.{% else %}Sans compte, ton bilan enregistré reste dans ce navigateur. Pour le synchroniser, connecte-toi avant de créer un contrôle.{% endif %}</p>
+</div>
+<script defer src="{{ url_for('static', filename='exam.js', v='exam-1') }}"></script>
+{% endblock %}

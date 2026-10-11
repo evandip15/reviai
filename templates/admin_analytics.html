@@ -78,7 +78,7 @@
                 {% for row in metrics %}
                 <tr>
                     <td>{{ row.date }}</td>
-                    <td>{% if row.feature == "revision" %}Fiches{% elif row.feature == "detection" %}Repérages d’exercices{% elif row.feature == "exercise" %}Corrections d’exercices{% elif row.feature == "chat" %}Messages de suivi{% else %}Quiz{% endif %}</td>
+                    <td>{% if row.feature == "revision" %}Fiches{% elif row.feature == "detection" %}Repérages d’exercices{% elif row.feature == "exercise" %}Corrections d’exercices{% elif row.feature == "chat" %}Messages de suivi{% elif row.feature == "exam" %}Contrôles blancs{% else %}Quiz{% endif %}</td>
                     <td>{{ row.uses }}</td>
                     <td>{{ row.browsers }}</td>
                 </tr>

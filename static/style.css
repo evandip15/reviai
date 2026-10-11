@@ -180,6 +180,8 @@
 @media(max-width:650px){.topbar-inner{align-items:flex-start;flex-direction:column;gap:12px}.top-actions{justify-content:flex-start;gap:9px 12px}.top-actions .nav-link{font-size:12px}}
 
 /* Tableau de suivi de l'éditeur et choix facultatif des statistiques. */
+.mode-switcher-with-exam{grid-template-columns:repeat(3,minmax(0,1fr))}.exam-mode-link{text-decoration:none;background:#f4f1ff;border-color:#d5ccfa}.exam-mode-link:focus-visible{outline:3px solid #b4a9ff;outline-offset:3px}
+@media(max-width:850px){.mode-switcher-with-exam{grid-template-columns:1fr}}
 .stats-periods{display:flex;gap:8px;margin:24px 0;flex-wrap:wrap}
 .stats-periods a{padding:10px 18px;border:1px solid var(--line);border-radius:100px;text-decoration:none;font-weight:700;color:var(--text)}
 .stats-periods a[aria-current="page"]{background:var(--primary);border-color:var(--primary);color:white}

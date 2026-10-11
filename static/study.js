@@ -348,6 +348,14 @@
         popup.document.getElementById("printPdf").addEventListener("click", () => popup.print());
         popup.focus();
     }
+    study.exportPdf = exportPdf;
+    el("examFromRevisionButton").addEventListener("click", () => {
+        if (!currentRevisionText.trim()) return;
+        try {
+            sessionStorage.setItem("reviai-exam-course", JSON.stringify({content:currentRevisionText, title:currentRevisionTitle, scope:document.body.dataset.accountId || ""}));
+            window.location.href = "/controle-blanc";
+        } catch (_) { alert("Le transfert de la fiche est bloqué par ce navigateur. Ouvre « Contrôle blanc » et colle le texte de ta fiche."); }
+    });
     el("exportRevisionButton").addEventListener("click", () => exportPdf(currentRevisionTitle, currentRevisionText));
     el("exportExerciseButton").addEventListener("click", () => exportPdf(currentExerciseTitle, currentExerciseText));
     const guided = el("guidedExerciseToggle");

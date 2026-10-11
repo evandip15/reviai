@@ -114,6 +114,7 @@ DAILY_LIMITS = {
     "exercise": configured_limit("FREE_EXERCISES_PER_DAY", 3),
     "chat": configured_limit("FREE_CHAT_MESSAGES_PER_DAY", 10),
     "quiz": configured_limit("FREE_QUIZZES_PER_DAY", 3),
+    "exam": configured_limit("FREE_MOCK_EXAMS_PER_DAY", 1),
 }
 
 # Un seul traitement IA à la fois sur le petit serveur gratuit.
@@ -1439,7 +1440,7 @@ def robots_txt():
 @app.route("/sitemap.xml")
 def sitemap():
     pages = [
-        "/", "/guides", *[f"/guides/{slug}" for slug in GUIDES],
+        "/", "/controle-blanc", "/guides", *[f"/guides/{slug}" for slug in GUIDES],
         "/a-propos", "/faq", "/privacy", "/terms",
     ]
     urls = "".join(
@@ -1514,7 +1515,7 @@ def protect_admin_responses(response):
         response.headers["X-Robots-Tag"] = "noindex, nofollow, noarchive"
     if (
         getattr(g, "reviai_browser_cookie_new", False)
-        and (request.path == "/" or request.path.startswith("/api/"))
+        and (request.path in {"/", "/controle-blanc"} or request.path.startswith("/api/"))
     ):
         response.set_cookie(
             "reviai_browser",
@@ -1968,6 +1969,7 @@ def delete_account():
     except Exception:
         app.logger.exception("Suppression de compte impossible.")
         return redirect(url_for("account_page", status="delete_error"))
+    mock_exams.forget_account(user_id)
     session.clear()
     return render_template(
         "account_message.html", title="Compte supprimé",
@@ -2629,6 +2631,9 @@ site_analytics = SiteAnalytics(app, sys.modules[__name__])
 
 from study import register_study_routes
 register_study_routes(app, sys.modules[__name__])
+
+from mock_exam import MockExams
+mock_exams = MockExams(app, sys.modules[__name__])
 
 
 if __name__ == "__main__":

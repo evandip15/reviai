@@ -80,6 +80,12 @@ Aucun paiement, envoi d’e-mail à une personne, création de compte réel ou c
 
 ## Rejouer les vérifications
 
+### Mode Contrôle blanc · 11 octobre 2026
+
+Contrôles statiques : syntaxe Python de `app.py`, `study.py`, `mock_exam.py` et `exam_ai.py` ; syntaxe Jinja des 20 modèles HTML ; syntaxe JavaScript de `static/exam.js`, `static/script.js` et `static/study.js`. Aucune suite de tests fonctionnels ni requête IA n’a été lancée pour cette demande. La création d’un sujet réel, la lecture d’une copie photographiée, la correction, l’impression et la sauvegarde Neon restent à valider après déploiement. Aucun changement GitHub, Render, Stripe ou Neon n’a été effectué.
+
+La note est calculée à partir des crédits par critère renvoyés par l’IA et validés par le serveur ; cela valide la structure et les bornes du barème, pas l’exactitude pédagogique de chaque jugement. Une incertitude signalée empêche l’attribution d’une note globale. Le contrôle en cours est temporaire, propre au processus serveur et limité à trois heures ; seuls les bilans enregistrés dans la bibliothèque sont durables.
+
 ### Ajout du tableau de suivi · 11 octobre 2026
 
 Contrôles statiques effectués après cette modification : analyse de syntaxe de `app.py` et `site_analytics.py`, analyse des 19 modèles HTML avec Jinja, contrôle de syntaxe JavaScript de `static/analytics.js`. Aucune suite de tests fonctionnels n’a été lancée pour cette demande. Aucune connexion à Neon, modification de Render, notification Stripe ou publication GitHub n’a été réalisée. Les parcours de consentement, la création des tables et les nouveaux compteurs n’ont pas été validés sur le site en ligne. Les résultats des anciennes vérifications ci-dessus ne valident pas cette nouvelle fonction.

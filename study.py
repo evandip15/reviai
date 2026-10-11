@@ -1,5 +1,6 @@
 """Bibliothèque privée, cartes de révision et tableau des abonnements."""
 import json
+import math
 import re
 from datetime import datetime, timedelta, timezone
 
@@ -48,12 +49,13 @@ def lock_library(connection, owner):
 
 
 def clean_item(raw, item_id):
-    if not isinstance(raw, dict) or raw.get("type") not in {"revision", "exercise", "quiz", "flashcards"}:
+    if not isinstance(raw, dict) or raw.get("type") not in {"revision", "exercise", "quiz", "flashcards", "exam"}:
         raise ValueError("Choisis un élément de révision valide.")
     if len(json.dumps(raw, ensure_ascii=False)) > 180000:
         raise ValueError("Cet élément est trop volumineux pour être enregistré.")
     clean = {"id": item_id, "type": raw["type"]}
-    for key, limit in (("title", 180), ("content", 30000), ("folder", 100), ("sourceContent", 30000), ("sourceId", 100)):
+    content_limit = 120000 if raw["type"] == "exam" else 30000
+    for key, limit in (("title", 180), ("content", content_limit), ("folder", 100), ("sourceContent", 30000), ("sourceId", 100)):
         clean[key] = str(raw.get(key) or "")[:limit]
     for key in ("createdAt", "updatedAt"):
         clean[key] = datetime.now(timezone.utc).isoformat()
@@ -62,6 +64,11 @@ def clean_item(raw, item_id):
             clean["createdAt"] = datetime.fromisoformat(str(raw["createdAt"]).replace("Z", "+00:00")).isoformat()
         except ValueError:
             pass
+    if raw["type"] == "exam":
+        score = raw.get("score")
+        if score is not None and (type(score) not in {int, float} or not math.isfinite(score) or not 0 <= score <= 20):
+            raise ValueError("La note de ce contrôle est invalide.")
+        clean["score"], clean["total"] = score, 20
     if raw["type"] == "quiz":
         questions = raw.get("questions", [])
         if not isinstance(questions, list) or len(questions) > 30:

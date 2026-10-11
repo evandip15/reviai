@@ -30,12 +30,12 @@
     <main class="wrap">
         <section class="hero">
             <div>
-                <span class="pill">🧠 FICHES + EXERCICES</span>
+                <span class="pill">🧠 FICHES + EXERCICES + CONTRÔLES BLANCS</span>
                 <h1>Tes cours deviennent des <span>outils pour progresser</span>.</h1>
                 <p>Crée une fiche à partir de tes cours ou envoie une photo ou un document d’exercice pour choisir le bon numéro, les questions et le type d’aide.</p>
             </div>
             <div class="hero-stats">
-                <div><strong>4</strong><span>fiches, quiz, cartes, exercices</span></div>
+                <div><strong>5</strong><span>fiches, quiz, cartes, exercices, contrôles</span></div>
                 <div><strong>10</strong><span>questions par quiz</span></div>
                 <div><strong>📎</strong><span>photo ou document d’exercice</span></div>
             </div>
@@ -84,7 +84,7 @@
             <div id="libraryList" class="library-list"></div>
         </section>
 
-        <nav class="mode-switcher" aria-label="Choisir une activité">
+        <nav class="mode-switcher mode-switcher-with-exam" aria-label="Choisir une activité">
             <button class="mode-option active" id="revisionModeButton" type="button" aria-pressed="true">
                 <span class="mode-icon">📚</span>
                 <span><strong>Créer une fiche</strong><small>À partir de tes cours</small></span>
@@ -93,6 +93,7 @@
                 <span class="mode-icon">📎</span>
                 <span><strong>Résoudre un exercice</strong><small>Envoie une photo ou un document</small></span>
             </button>
+            <a class="mode-option exam-mode-link" href="/controle-blanc"><span class="mode-icon">📝</span><span><strong>Contrôle blanc</strong><small>Un sujet sur 20 et sa correction</small></span></a>
         </nav>
         <p id="usageSummary" class="usage-summary" role="status" aria-live="polite">Chargement de tes limites gratuites du jour…</p>
 
@@ -262,6 +263,7 @@
                     <button id="copyButton" class="button button-secondary" type="button">Copier</button>
                     <button id="exportRevisionButton" class="button button-secondary" type="button">Exporter en PDF</button>
                     <button id="flashcardsButton" class="button button-secondary" type="button">Créer mes cartes</button>
+                    <button id="examFromRevisionButton" class="button button-secondary" type="button">Créer un contrôle blanc</button>
                 </div>
             </div>
             <article id="resultContent" class="revision"></article>
@@ -342,7 +344,7 @@
     </footer>
 
     {% include "analytics_consent.html" %}
-    <script src="{{ url_for('static', filename='script.js', v='library-editor-2') }}"></script>
-    <script src="{{ url_for('static', filename='study.js', v='library-editor-2') }}"></script>
+    <script src="{{ url_for('static', filename='script.js', v='exam-1') }}"></script>
+    <script src="{{ url_for('static', filename='study.js', v='exam-1') }}"></script>
 </body>
 </html>

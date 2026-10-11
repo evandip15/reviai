@@ -6,6 +6,7 @@
 - Trois formes d'accompagnement pour les exercices : indice, aide pas à pas ou correction complète avec vérification.
 - Signalement volontaire des erreurs de lecture, de calcul ou d'explication pour examen par l'éditeur.
 - Quiz générés à partir du cours, avec 4 réponses, correction et nouvelles questions.
+- Contrôles blancs à partir du cours ou d’une fiche, réponses rédigées ou copie photographiée, barème sur 20, bilan et export PDF.
 - Limites gratuites configurables et appliquées côté serveur : fiches, repérages et corrections d’exercices, messages de suivi et quiz.
 - Bibliothèque personnelle locale pour enregistrer fiches, corrections et scores de quiz sans créer de compte.
 - Comptes Plus avec adresse confirmée, mot de passe sécurisé, réinitialisation par e-mail et gestion personnelle de l’abonnement.
@@ -20,6 +21,23 @@
 - Guides pédagogiques publics, FAQ et pages À propos et confidentialité.
 - Sitemap et robots.txt générés à partir du domaine public configuré.
 - Publicités désactivées par défaut et réservées aux pages de guides.
+
+## Mode Contrôle blanc
+
+Ouvrir `/controle-blanc` depuis l’accueil, la navigation ou **Créer un contrôle blanc** sous une fiche. Aucun nouveau compte de service, aucune nouvelle clé et aucune dépendance ne sont requis : les appels passent par le fournisseur IA déjà configuré.
+
+1. Coller un chapitre (80 à 60 000 caractères), importer ses documents ou choisir une fiche de la bibliothèque. PDF, DOCX, ODT, PPTX, TXT, JPG/JPEG, PNG et WEBP sont acceptés, dans la limite totale `MAX_UPLOAD_MB` habituelle. Plusieurs documents sont lus dans l’ordre, sans couper silencieusement un cours trop long.
+2. Choisir le niveau et la durée : 15 minutes donnent 4 questions ; 30 minutes, 6 questions ; 45, 60 ou 90 minutes, 8 questions. Chaque sujet totalise exactement 20 points. Le corrigé et les critères détaillés restent côté serveur avant remise.
+3. Cliquer sur **Commencer mon contrôle**. La durée est calculée avec l’horloge du serveur ; le chronomètre se recalcule après changement d’onglet et se fige à la remise. Un dépassement est indiqué sans pénalité.
+4. Rédiger les réponses ou envoyer les pages de la copie. **Lire ma copie** permet de relire et corriger sa transcription ; la confirmation de relecture est requise avant correction de cette transcription. Au plus trois envois de lecture sont autorisés par essai. Les originaux sont supprimés après lecture.
+5. Rendre la copie : le serveur applique les critères, borne chaque crédit à son maximum et additionne les points. Les réponses absentes sans copie commune valent zéro. Si l’IA signale une lecture, un énoncé ou un barème incertain, la question reste à vérifier et aucune note globale n’est attribuée ; les points évaluables sont affichés séparément. Une correction reste une estimation pédagogique et peut être erronée.
+6. Enregistrer le bilan dans un dossier, le copier, le télécharger en texte ou l’exporter en PDF via l’impression. Un bilan enregistré a le type `exam` et une taille maximale de 120 000 caractères. Il s’ouvre dans la bibliothèque sans remplacer une fiche ni entrer dans la moyenne des QCM. Les bilans des comptes et de l’éditeur utilisent leurs espaces synchronisés existants ; les bilans anonymes restent locaux. Aucune nouvelle table de bibliothèque n’est ajoutée.
+
+La génération, la lecture de copie et la correction sont des tâches asynchrones dans l’exécuteur IA existant. Les erreurs permettent jusqu’à trois tentatives de génération et de correction pour le même essai. Une création décompte le quota quotidien ; une relance technique du même essai et sa correction ne décomptent pas un nouveau contrôle. La variable facultative `FREE_MOCK_EXAMS_PER_DAY` vaut **1** par défaut, indépendamment du quota de quiz. Plus, VIP et éditeur restent sans limite quotidienne de création, avec les bornes de taille, de concurrence et de tentatives par essai. Les appels utilisent et consomment les quotas éventuels du fournisseur IA existant.
+
+Les contrôles en cours sont privés et temporaires en mémoire pendant trois heures à partir de leur création, dans le processus unique configuré par le Dockerfile. Ils peuvent disparaître au redémarrage ; aucun stockage durable des essais en cours n’est promis. Les routes vérifient le propriétaire et un jeton CSRF pour les actions. Le cookie de quota identifie aussi les essais anonymes. Le brouillon des réponses et l’identifiant de reprise sont conservés dans le stockage de session de l’onglet, séparés par compte ou navigateur. Après un changement de connexion, rouvrir la page ; connecter son compte avant de commencer facilite l’enregistrement synchronisé du bilan. Supprimer un compte retire aussi ses essais temporaires.
+
+À publier ensemble pour cette fonction : `app.py`, `study.py`, les nouveaux `mock_exam.py` et `exam_ai.py`, `static/exam.js`, `static/exam.css`, `static/script.js`, `static/study.js`, `static/style.css`, `templates/mock_exam.html`, `templates/index.html`, `templates/public_base.html`, `templates/admin_analytics.html`, `templates/plus.html`, `templates/faq.html`, `templates/privacy.html`, `templates/terms.html`. Le README, le rapport et `.env.example` documentent la fonction. Aucun changement Render n’est obligatoire ; `FREE_MOCK_EXAMS_PER_DAY` est optionnel.
 
 ## Tableau de suivi dans l’espace éditeur
 
