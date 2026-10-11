@@ -1,4 +1,5 @@
 import os
+import sys
 import random
 import re
 import secrets
@@ -1296,6 +1297,7 @@ def process_exercise(
                 "initial_solution": solution,
                 "exercise_number": exercise_number,
                 "selected_questions": list(selected_questions or []),
+                "help_mode": help_mode,
                 "history": [],
                 "created": time.time(),
             }
@@ -1493,6 +1495,10 @@ def faq():
 
 @app.after_request
 def protect_admin_responses(response):
+    if request.path == "/" or request.path.startswith("/api/library"):
+        response.headers["Cache-Control"] = "no-store, private"
+    if request.path.startswith("/api/library"):
+        response.headers["X-Robots-Tag"] = "noindex, nofollow, noarchive"
     if request.path.startswith(("/compte", "/connexion", "/inscription", "/mot-de-passe")):
         response.headers["Cache-Control"] = "no-store, private"
         response.headers["X-Robots-Tag"] = "noindex, nofollow, noarchive"
@@ -2467,12 +2473,17 @@ def exercise_chat():
         }), 429
 
     try:
+        chat_instruction = session_data["instruction"]
+        if session_data.get("exercise_number") is not None:
+            chat_instruction += f"\nReste exclusivement sur l’exercice {session_data['exercise_number']}."
+        if session_data.get("help_mode") in {"hint", "step_by_step"}:
+            chat_instruction += "\nMode apprentissage : examine l’essai de l’élève, explique son éventuelle erreur et donne une seule prochaine étape. Ne révèle pas la réponse finale, sauf si son dernier message demande explicitement la correction complète. Termine par une question pour le laisser essayer."
         answer = chat_about_exercise(
             session_data["context"],
             session_data["initial_solution"],
             session_data["history"],
             message,
-            instruction=session_data["instruction"],
+            instruction=chat_instruction,
         )
     except Exception as exc:
         return jsonify({"error": f"L'IA n'a pas pu répondre : {exc}"}), 500
@@ -2556,6 +2567,10 @@ def quiz():
         state = LATEST_BY_SESSION.get(session_key)
 
     revision_text = str(payload.get("revision_text", "")).strip()[:30000]
+    focus = payload.get("focus", [])
+    if not isinstance(focus, list) or len(focus) > 30 or any(not isinstance(item, str) for item in focus):
+        return jsonify({"error": "Les notions à retravailler sont invalides."}), 400
+    focus_text = "\n".join(item[:1200] for item in focus)[:8000]
     if not state and not revision_text:
         return jsonify({"error": "Génère ou ouvre une fiche de révision avant de lancer un quiz."}), 400
 
@@ -2567,10 +2582,12 @@ def quiz():
         }), 429
 
     try:
+        options = {"focus": focus_text} if focus_text else {}
         result = generate_quiz(
             state["course"] if state else revision_text,
             recent_questions=state["recent_questions"] if state else [],
             count=10,
+            **options,
         )
     except Exception as exc:
         return jsonify({"error": f"Erreur pendant la création du quiz : {exc}"}), 500
@@ -2590,6 +2607,10 @@ def quiz():
 @app.errorhandler(413)
 def too_large(_error):
     return jsonify({"error": f"Fichier trop volumineux. Maximum : {MAX_MB} Mo."}), 413
+
+
+from study import register_study_routes
+register_study_routes(app, sys.modules[__name__])
 
 
 if __name__ == "__main__":

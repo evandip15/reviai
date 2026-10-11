@@ -94,6 +94,16 @@ let quizQuestions = [];
 let quizIndex = 0;
 let quizScoreValue = 0;
 let answered = false;
+let quizSelections = [];
+let quizFocus = [];
+let quizRunId = "";
+let quizRunSource = "";
+let quizRunTitle = "";
+let quizRunSourceId = "";
+let quizRunFolder = "";
+let currentRevisionFolder = "";
+let currentExerciseFolder = "";
+let quizLoading = false;
 
 
 /* =========================
@@ -305,6 +315,8 @@ function markdownToHtml(markdown) {
 ========================= */
 
 function readLibrary() {
+    if (window.ReviStudy) return window.ReviStudy.items.slice();
+    if (document.body.dataset.accountSignedIn === "true") return [];
     try {
         const value = JSON.parse(localStorage.getItem(LIBRARY_STORAGE_KEY) || "[]");
         return Array.isArray(value) ? value.filter(item => item && typeof item === "object") : [];
@@ -331,6 +343,7 @@ function renderLibrary() {
     }
 
     for (const item of items) {
+        if (window.ReviStudy && !window.ReviStudy.matches(item)) continue;
         const card = document.createElement("article");
         card.className = "library-item";
 
@@ -340,7 +353,7 @@ function renderLibrary() {
         title.textContent = String(item.title || "Révision");
         const type = document.createElement("span");
         type.className = "library-type";
-        type.textContent = item.type === "exercise" ? "Exercice" : item.type === "quiz" ? "Quiz" : "Fiche";
+        type.textContent = item.type === "exercise" ? "Exercice" : item.type === "quiz" ? "Quiz" : item.type === "flashcards" ? "Cartes" : "Fiche";
         top.append(type, title);
         card.appendChild(top);
 
@@ -376,11 +389,18 @@ function renderLibrary() {
         remove.textContent = "Supprimer";
         actions.appendChild(remove);
         card.appendChild(actions);
+        if (window.ReviStudy) window.ReviStudy.decorate(card, item, actions);
         libraryList.appendChild(card);
     }
+    if (window.ReviStudy) window.ReviStudy.renderProgress(items);
 }
 
-function saveLibraryItem(type, title, content, id, score = null, total = null) {
+async function saveLibraryItem(type, title, content, id, score = null, total = null, extra = {}) {
+    if (window.ReviStudy) return window.ReviStudy.save(type, title, content, id, score, total, extra);
+    if (document.body.dataset.accountSignedIn === "true") {
+        alert("La bibliothèque de ton compte est en cours de chargement. Réessaie dans un instant.");
+        return false;
+    }
     const items = readLibrary();
     const itemId = id || `item-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
     const previous = items.find(item => item.id === itemId);
@@ -398,7 +418,7 @@ function saveLibraryItem(type, title, content, id, score = null, total = null) {
     try {
         localStorage.setItem(LIBRARY_STORAGE_KEY, JSON.stringify(next));
         renderLibrary();
-        return true;
+        return item;
     } catch (error) {
         console.warn("Enregistrement local impossible", error);
         alert("La bibliothèque de ce navigateur est pleine. Supprime quelques anciens éléments puis réessaie.");
@@ -419,12 +439,19 @@ function libraryTextPreview(text) {
 }
 
 function openLibraryItem(item) {
+    if (window.ReviStudy) window.ReviStudy.opened(item);
+    if (item.type === "flashcards" && window.ReviStudy) {
+        window.ReviStudy.openDeck(item);
+        return;
+    }
     libraryPanel.classList.add("hidden");
     libraryToggleButton.setAttribute("aria-expanded", "false");
     if (item.type === "exercise") {
         currentExerciseTitle = String(item.title || "Exercice expliqué");
         currentExerciseLibraryId = String(item.id || "");
+        currentExerciseFolder = item.folder || "";
         currentExerciseText = String(item.content || "");
+        document.getElementById("exerciseResultTitle").textContent = "Ton exercice enregistré";
         exerciseSessionId = "";
         exerciseChatMessages.replaceChildren();
         exerciseQuickHelp.classList.add("hidden");
@@ -440,6 +467,7 @@ function openLibraryItem(item) {
         currentRevisionText = String(item.content || "");
         currentRevisionTitle = String(item.title || "Fiche de révision");
         currentRevisionLibraryId = String(item.id || "");
+        currentRevisionFolder = item.folder || "";
         quizButton.disabled = !currentRevisionText.trim();
         saveRevisionButton.textContent = "＋ Enregistrer";
         resultContent.innerHTML = markdownToHtml(item.content || "");
@@ -467,7 +495,7 @@ async function refreshUsageSummary() {
             ["detection", "repérages"],
             ["exercise", "exercices"],
             ["chat", "messages de suivi"],
-            ["quiz", "quiz"],
+            ["quiz", "quiz ou jeux de cartes"],
         ];
         usageSummary.textContent = `Aujourd’hui, il te reste ${labels.map(([key, label]) => {
             const item = limits[key] || {};
@@ -488,12 +516,16 @@ libraryToggleButton.addEventListener("click", () => {
     }
 });
 
-libraryList.addEventListener("click", event => {
+libraryList.addEventListener("click", async event => {
     const button = event.target.closest("button[data-library-action]");
     if (!button) return;
     const itemId = button.dataset.libraryId;
     const items = readLibrary();
     if (button.dataset.libraryAction === "delete") {
+        if (window.ReviStudy) {
+            await window.ReviStudy.remove(itemId);
+            return;
+        }
         try {
             localStorage.setItem(LIBRARY_STORAGE_KEY, JSON.stringify(items.filter(item => item.id !== itemId)));
             renderLibrary();
@@ -506,20 +538,28 @@ libraryList.addEventListener("click", event => {
     if (item) openLibraryItem(item);
 });
 
-saveRevisionButton.addEventListener("click", () => {
-    const saved = saveLibraryItem("revision", currentRevisionTitle, currentRevisionText || resultContent.innerText, currentRevisionLibraryId);
+saveRevisionButton.addEventListener("click", async () => {
+    saveRevisionButton.disabled = true;
+    const saved = await saveLibraryItem("revision", currentRevisionTitle, currentRevisionText || resultContent.innerText, currentRevisionLibraryId, null, null, {folder: currentRevisionFolder});
+    saveRevisionButton.disabled = false;
     if (saved) {
+        currentRevisionLibraryId = saved.id;
+        currentRevisionFolder = saved.folder || "";
         saveRevisionButton.textContent = "Enregistrée ✓";
         libraryToggleButton.textContent = "📚 Ma bibliothèque";
     }
 });
 
-saveExerciseButton.addEventListener("click", () => {
-    const saved = saveLibraryItem("exercise", currentExerciseTitle, currentExerciseText || exerciseSolutionContent.innerText, currentExerciseLibraryId);
+saveExerciseButton.addEventListener("click", async () => {
+    saveExerciseButton.disabled = true;
+    const saved = await saveLibraryItem("exercise", currentExerciseTitle, currentExerciseText || exerciseSolutionContent.innerText, currentExerciseLibraryId, null, null, {folder: currentExerciseFolder});
+    saveExerciseButton.disabled = false;
+    if (saved) { currentExerciseLibraryId = saved.id; currentExerciseFolder = saved.folder || ""; }
     if (saved) saveExerciseButton.textContent = "Enregistré ✓";
 });
 
-clearLibraryButton.addEventListener("click", () => {
+clearLibraryButton.addEventListener("click", async () => {
+    if (window.ReviStudy) { await window.ReviStudy.clear(); return; }
     if (!confirm("Effacer toutes les fiches, tous les exercices et tous les résultats enregistrés sur cet appareil ?")) return;
     localStorage.removeItem(LIBRARY_STORAGE_KEY);
     renderLibrary();
@@ -770,6 +810,7 @@ form.addEventListener("submit", async event => {
             : "Fiche de révision";
         currentRevisionLibraryId = sessionId ? `revision-${sessionId}` : `revision-${Date.now()}`;
         currentRevisionText = content;
+        currentRevisionFolder = window.ReviStudy && document.getElementById("libraryFolderFilter").value !== "all" ? document.getElementById("libraryFolderFilter").value : "";
         quizButton.disabled = false;
         saveRevisionButton.textContent = "＋ Enregistrer";
 
@@ -841,13 +882,21 @@ copyButton.addEventListener("click", async () => {
    GENERATION DU QUIZ
 ========================= */
 
-async function loadQuiz() {
+async function loadQuiz(options = {}) {
+    if (quizLoading) return;
     if (!sessionId && !currentRevisionText.trim()) {
         return;
     }
 
     quizButton.disabled = true;
+    quizLoading = true;
+    retryQuizButton.disabled = true;
     quizButton.textContent = "Génération…";
+    quizFocus = Array.isArray(options.focus) ? options.focus : [];
+    const sourceText = currentRevisionText;
+    const sourceTitle = currentRevisionTitle;
+    const sourceId = currentRevisionLibraryId;
+    const sourceFolder = currentRevisionFolder;
 
     try {
         const response = await fetch("/api/quiz", {
@@ -858,6 +907,7 @@ async function loadQuiz() {
             body: JSON.stringify({
                 session_id: sessionId,
                 revision_text: sessionId ? "" : currentRevisionText,
+                focus: quizFocus,
             })
         });
 
@@ -885,6 +935,12 @@ async function loadQuiz() {
         quizIndex = 0;
         quizScoreValue = 0;
         quizSavedForRun = false;
+        quizSelections = [];
+        quizRunId = `quiz-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+        quizRunSource = sourceText;
+        quizRunTitle = sourceTitle;
+        quizRunSourceId = sourceId;
+        quizRunFolder = sourceFolder;
 
         quizResultCard.classList.add("hidden");
         quizCard.classList.remove("hidden");
@@ -905,6 +961,8 @@ async function loadQuiz() {
         );
 
     } finally {
+        quizLoading = false;
+        retryQuizButton.disabled = false;
         quizButton.disabled = false;
         quizButton.textContent = "🧠 Lancer le quiz";
     }
@@ -981,6 +1039,7 @@ function answerQuiz(index) {
     const buttons = [
         ...quizAnswers.querySelectorAll("button")
     ];
+    quizSelections[quizIndex] = index;
 
     buttons.forEach(button => {
         button.disabled = true;
@@ -1047,9 +1106,11 @@ function nextQuizQuestion() {
    FIN DU QUIZ
 ========================= */
 
-function finishQuiz() {
+async function finishQuiz() {
     quizCard.classList.add("hidden");
     quizResultCard.classList.remove("hidden");
+    if (window.ReviStudy) window.ReviStudy.showQuizMistakes();
+    quizResultCard.scrollIntoView({behavior: "smooth", block: "center"});
 
     quizFinalScore.textContent =
         `${quizScoreValue} / ${quizQuestions.length}`;
@@ -1074,21 +1135,20 @@ function finishQuiz() {
     }
 
     if (!quizSavedForRun) {
-        saveLibraryItem(
-            "quiz",
-            `Résultat du quiz — ${currentRevisionTitle}`,
-            `Score : ${quizScoreValue} / ${quizQuestions.length}`,
-            `quiz-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-            quizScoreValue,
-            quizQuestions.length
-        );
         quizSavedForRun = true;
+        const saved = await saveLibraryItem(
+            "quiz",
+            `Résultat du quiz — ${quizRunTitle}`,
+            `Score : ${quizScoreValue} / ${quizQuestions.length}`,
+            quizRunId,
+            quizScoreValue,
+            quizQuestions.length,
+            {folder: quizRunFolder, sourceContent: quizRunSource, sourceId: quizRunSourceId,
+                questions: quizQuestions.map((question, index) => ({...question, selected: quizSelections[index]}))}
+        );
+        if (!saved) quizSavedForRun = false;
     }
 
-    quizResultCard.scrollIntoView({
-        behavior: "smooth",
-        block: "center"
-    });
 }
 
 
@@ -1590,7 +1650,8 @@ exerciseForm.addEventListener("submit", async event => {
     data.append("detection_id", exerciseDetectionId);
     data.append("exercise_number", exerciseNumberInput.value.trim());
     selectedQuestions.forEach(question => data.append("questions", question));
-    data.append("help_mode", exerciseHelpMode.value);
+    const requestedHelpMode = exerciseHelpMode.value;
+    data.append("help_mode", requestedHelpMode);
     data.append("instruction", exerciseInstructionInput.value.trim());
 
     try {
@@ -1610,6 +1671,8 @@ exerciseForm.addEventListener("submit", async event => {
         currentExerciseTitle = `Correction de l’exercice ${result.exercise_number || exerciseNumberInput.value.trim()}`;
         currentExerciseLibraryId = exerciseSessionId ? `exercise-${exerciseSessionId}` : `exercise-${Date.now()}`;
         currentExerciseText = solution;
+        document.getElementById("exerciseResultTitle").textContent = requestedHelpMode === "complete" ? "La solution expliquée" : "À toi d’essayer";
+        currentExerciseFolder = window.ReviStudy && document.getElementById("libraryFolderFilter").value !== "all" ? document.getElementById("libraryFolderFilter").value : "";
         saveExerciseButton.textContent = "＋ Enregistrer";
         exerciseSolutionContent.innerHTML = markdownToHtml(solution);
         savedExerciseNotice.classList.add("hidden");
@@ -1626,14 +1689,14 @@ exerciseForm.addEventListener("submit", async event => {
         exerciseFeedbackStatus.classList.remove("error");
         openExerciseFeedbackButton.disabled = false;
         exerciseResultCard.classList.remove("hidden");
-        setExerciseStatus("Exercice résolu !");
+        setExerciseStatus(requestedHelpMode === "complete" ? "Exercice résolu !" : "Ton aide est prête. Propose ton essai dans le chat pour continuer.");
         exerciseResultCard.scrollIntoView({ behavior: "smooth", block: "start" });
     } catch (error) {
         console.error(error);
         setExerciseStatus(error.message || "Une erreur est survenue pendant la résolution.", true);
     } finally {
         solveExerciseButton.disabled = !exerciseDetectionId || !/^\d{1,3}$/.test(exerciseNumberInput.value.trim());
-        solveExerciseButton.textContent = "✨ Résoudre mon exercice";
+        solveExerciseButton.textContent = exerciseHelpMode.value === "complete" ? "✨ Résoudre mon exercice" : "💡 Commencer avec une aide";
     }
 });
 

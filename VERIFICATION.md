@@ -1,5 +1,15 @@
 # Vérification de RéviAI — 11 octobre 2026
 
+## Ajouts postérieurs : bibliothèque, entraînement et abonnements
+
+Les six améliorations sont implémentées localement : bibliothèque liée au compte et dossiers, cartes avec rappels espacés, aide guidée, quiz ciblés sur les erreurs, export A4 via l’enregistrement PDF du navigateur et page privée `/admin/abonnements`.
+
+Contrôles effectués sur ces ajouts : analyse de syntaxe de `app.py`, `ai.py` et `study.py`, analyse des 18 modèles Jinja et validation de syntaxe de `static/script.js` et `static/study.js`. Aucun test fonctionnel supplémentaire ni essai en production n’a été exécuté pour ces nouvelles fonctions. Les 32 tests décrits plus bas concernent la version précédente, avant ces six ajouts.
+
+La synchronisation utilise les tables `reviai_library` et `reviai_study_folders`, créées automatiquement dans la base existante à la première utilisation. Les migrations PostgreSQL, la synchronisation réelle entre appareils, les appels IA de cartes et quiz ciblés, l’impression PDF et les permissions de lecture des mouvements Stripe restent à vérifier après déploiement. Aucun service externe supplémentaire, variable secrète ou dépendance de production n’a été ajouté.
+
+Publier les fichiers Python, le dossier `static` et le dossier `templates`, notamment les nouveaux fichiers `study.py`, `static/study.js` et `templates/admin_subscriptions.html`. Les anciennes instructions de publication limitée à deux fichiers ci-dessous concernent uniquement la correction de résiliation précédente.
+
 ## Résultats observés sur le site en ligne
 
 Les 22 pages et ressources contrôlées sur `https://reviai.onrender.com` répondent en HTTP 200 : accueil, Plus, inscription, connexion, mot de passe oublié, guides et leurs cinq articles, À propos, FAQ, conditions, confidentialité, robots.txt, sitemap, ads.txt, état du serveur, quotas, JavaScript et CSS.

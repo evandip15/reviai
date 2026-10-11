@@ -11,6 +11,7 @@
         </div>
         <div class="section-actions">
             <a class="button button-secondary" href="{{ url_for('admin_accounts') }}">Comptes et pass VIP</a>
+            <a class="button button-secondary" href="{{ url_for('admin_subscriptions') }}">Abonnements et revenus</a>
             <a class="button button-secondary" href="{{ url_for('admin_feedback') }}">Signalements</a>
             <form method="post" action="{{ url_for('admin_logout') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

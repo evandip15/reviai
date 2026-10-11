@@ -7,6 +7,7 @@
     <a class="back" href="/">← RéviAI</a>
     <p class="kicker editorial-kicker">ESPACE PERSONNEL</p>
     <h1>Mon compte</h1>
+    <p>Ta bibliothèque est liée à ce compte : retrouve tes fiches, dossiers, exercices, cartes et résultats de quiz depuis tes autres appareils. <a href="/">Ouvrir RéviAI et ma bibliothèque</a></p>
     {% if status == 'verified' %}<p class="admin-alert admin-alert-success" role="status">Ton adresse e-mail est confirmée.</p>{% endif %}
     {% if status == 'vip_activated' %}<p class="admin-alert admin-alert-success" role="status">Ton pass VIP est activé ! Tous les outils sont accessibles sans limite quotidienne, gratuitement.</p>{% elif status == 'vip_already_active' %}<p class="admin-alert admin-alert-success" role="status">Ton accès VIP est déjà actif.</p>{% elif status == 'vip_invalid' %}<p class="admin-alert admin-alert-error" role="alert">Ce code VIP est incorrect, déjà utilisé ou révoqué. Vérifie-le auprès de la personne qui te l’a offert.</p>{% elif status == 'vip_error' %}<p class="admin-alert admin-alert-error" role="alert">Le pass n’a pas pu être activé. Réessaie plus tard.</p>{% endif %}
     {% if payment == 'success' %}<p class="admin-alert admin-alert-success" role="status">Paiement reçu. La mise à jour de ton abonnement peut prendre quelques secondes. Actualise cette page si Plus n’apparaît pas tout de suite.</p>{% elif payment == 'cancelled' %}<p class="admin-alert admin-alert-warning" role="status">Le paiement a été interrompu. Aucun abonnement n’a été démarré.</p>{% endif %}

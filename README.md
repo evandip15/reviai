@@ -127,7 +127,7 @@ L'espace éditeur est disponible à l'adresse `/admin`. Définis `ADMIN_PASSWORD
 
 Configure `PUBLIC_BASE_URL=https://ton-domaine.fr` pour que le sitemap et `robots.txt` utilisent le domaine publié.
 
-Le site publie `/privacy`, `/terms`, `/a-propos`, `/faq`, `/guides`, `/robots.txt` et `/sitemap.xml`. Aucun nom ni adresse e-mail n'est demandé pour utiliser le site. La bibliothèque de révision reste dans le stockage du navigateur ; un cookie fonctionnel aléatoire sert à appliquer les quotas gratuits et n'enregistre ni nom, ni e-mail, ni adresse IP dans la table de quota.
+Le site publie `/privacy`, `/terms`, `/a-propos`, `/faq`, `/guides`, `/robots.txt` et `/sitemap.xml`. Les outils gratuits fonctionnent sans compte ; un compte e-mail confirmé permet de synchroniser la bibliothèque. Un cookie fonctionnel aléatoire sert aux quotas gratuits et n'enregistre ni nom, ni e-mail, ni adresse IP dans leur table.
 
 ## Important pour un utilisateur mineur
 Google indique qu'un compte AdSense doit être détenu par une personne d'au moins 18 ans. Pour un mineur, un parent ou représentant légal peut s'inscrire avec son propre compte si le site est accepté, et les paiements sont alors versés à l'adulte responsable.
@@ -139,7 +139,18 @@ Les informations bancaires ne sont nécessaires qu'au moment de configurer un mo
 `render.yaml` et `Dockerfile` permettent de déployer le site sur un hébergeur compatible Docker. Ajoute les variables d'environnement dans le tableau de bord de l'hébergeur.
 
 ## Données
-Les fichiers importés sont supprimés à la fin du traitement. Les contenus servant à la fiche, au quiz et au chat sont conservés en mémoire du serveur pendant une heure pour permettre le suivi. La bibliothèque garde les résultats enregistrés et les scores de quiz dans le navigateur de l'élève ; elle ne synchronise pas entre appareils. Les quotas enregistrent un identifiant aléatoire haché, la fonction utilisée et la date, pendant 90 jours, uniquement pour limiter l'usage gratuit et afficher des statistiques quotidiennes. Les signalements volontaires sont enregistrés dans la base PostgreSQL configurée ou, en développement local, dans `data/exercise_feedback.jsonl`. Ne publie ni le fichier local ni les secrets de connexion. La politique de confidentialité du site décrit ces traitements et les fournisseurs d'IA configurés.
+Les fichiers originaux sont supprimés à la fin du traitement. Les contenus temporaires des fiches, quiz et chats restent en mémoire une heure. Sans compte, la bibliothèque reste dans le navigateur. Avec un compte confirmé, les éléments enregistrés, dossiers, cartes et résultats détaillés des quiz sont conservés dans PostgreSQL, jusqu’à leur suppression ou celle du compte (clés étrangères avec suppression en cascade). Les quotas gardent un identifiant aléatoire haché, la fonction et la date pendant 90 jours. Les signalements restent dans PostgreSQL ou, en développement local, dans `data/exercise_feedback.jsonl`. Ne publie ni données locales ni secrets.
+
+## Bibliothèque, cartes et suivi des abonnements
+
+- `study.py` ajoute les routes de bibliothèque privée et `/admin/abonnements`. Il est indispensable au démarrage ; publier ce fichier avec `app.py`.
+- Les tables `reviai_library` et `reviai_study_folders` sont créées à la première utilisation, dans la base `DATABASE_URL` existante. Aucun service supplémentaire ni nouvelle variable d’environnement n’est requis. Le rôle PostgreSQL doit pouvoir créer les tables, comme pour les comptes existants.
+- Bibliothèque gratuite : 200 éléments et 50 dossiers par compte. Lecture et modification sont limitées au compte connecté, avec protection CSRF, verrou du compte et contrôle de version. Une modification concurrente renvoie HTTP 409. L’import des anciennes données locales est volontaire ; les données d’un compte connecté ne sont pas copiées dans le stockage local du navigateur.
+- `static/study.js` apporte les dossiers, la recherche, les cartes modifiables, les rappels espacés, la progression par dossier, la lecture des corrections de quiz et l’entraînement ciblé sur les erreurs. Les cartes déjà créées ne consomment pas d’IA pendant la révision. La création de cartes utilise le quota `quiz` existant ; Plus, VIP et éditeur gardent leur accès sans limite quotidienne.
+- L’export PDF ouvre une page A4 adaptée à l’impression. L’utilisateur choisit « Enregistrer au format PDF » dans le navigateur. Aucune dépendance PDF côté serveur ni aucun service payant supplémentaire n’est ajouté.
+- « Aide-moi à comprendre » commence par un indice, conserve le contexte de l’exercice et invite l’élève à proposer son essai avant la prochaine étape.
+- `/admin/abonnements` affiche l’état connu des abonnements RéviAI. Le bouton d’actualisation lit les mouvements réels du compte Stripe entier des 30 derniers jours (maximum 2 000 mouvements, avertissement si tronqué). La clé restreinte Stripe doit autoriser la lecture du solde et des mouvements de solde. Aucun nouveau webhook n’est nécessaire pour les montants. Ils distinguent paiements bruts, remboursements, frais et net des mouvements retenus ; il ne s’agit ni d’une prévision ni du solde bancaire ni d’un bénéfice fiscal. Les autres devises que l’euro gardent leurs unités mineures Stripe. Les clés de test sont signalées.
+- Les montants financiers sont lus à la demande et ne sont pas stockés dans la bibliothèque. L’éditeur ne peut pas lire les bibliothèques des élèves depuis les pages d’administration.
 
 
 ## Images prises avec un téléphone

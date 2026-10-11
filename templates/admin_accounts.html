@@ -8,6 +8,7 @@
         <div class="section-actions">
             <a class="button button-secondary" href="{{ url_for('admin_feedback') }}">Signalements</a>
             <a class="button button-secondary" href="{{ url_for('admin_analytics') }}">Statistiques</a>
+            <a class="button button-secondary" href="{{ url_for('admin_subscriptions') }}">Abonnements et revenus</a>
             <form method="post" action="{{ url_for('admin_logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="button button-secondary" type="submit">Se déconnecter</button></form>
         </div>
     </div>
