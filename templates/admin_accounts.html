@@ -1,0 +1,77 @@
+{% extends "public_base.html" %}
+{% block title %}Comptes et pass VIP — Espace éditeur RéviAI{% endblock %}
+{% block extra_head %}<meta name="robots" content="noindex, nofollow, noarchive">{% endblock %}
+{% block content %}
+<section class="editorial card admin-card">
+    <div class="admin-heading">
+        <div><p class="kicker editorial-kicker">ESPACE ÉDITEUR</p><h1>Comptes et pass VIP</h1><p>Consulte les inscriptions, les dernières connexions et les accès offerts.</p></div>
+        <div class="section-actions">
+            <a class="button button-secondary" href="{{ url_for('admin_feedback') }}">Signalements</a>
+            <a class="button button-secondary" href="{{ url_for('admin_analytics') }}">Statistiques</a>
+            <form method="post" action="{{ url_for('admin_logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="button button-secondary" type="submit">Se déconnecter</button></form>
+        </div>
+    </div>
+    {% if storage_error %}<p class="admin-alert admin-alert-error" role="alert">{{ storage_error }}</p>{% endif %}
+    {% if status == 'vip_revoked' %}<p class="admin-alert admin-alert-success" role="status">Le pass est révoqué. Il ne donne plus d’accès VIP.</p>{% endif %}
+
+    <section class="vip-panel" aria-labelledby="vipTitle">
+        <h2 id="vipTitle">Offrir un accès VIP</h2>
+        <p>Crée un code pour chaque ami. Il active un accès gratuit sans limite quotidienne, sans date de fin, jusqu’à sa révocation. Chaque code peut être utilisé une seule fois.</p>
+        <form class="admin-login-form" method="post" action="{{ url_for('admin_create_vip') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <label for="vipLabel">Nom du pass (visible uniquement ici)</label>
+            <input id="vipLabel" name="label" maxlength="80" placeholder="Ex. Cadeau pour Léa" required>
+            <button class="button button-primary" type="submit" {% if not database_ready %}disabled{% endif %}>Créer un pass VIP</button>
+        </form>
+        {% if new_vip_code %}
+        <div class="vip-new-code" role="status">
+            <label for="newVipCode"><strong>Pass créé : copie ce code maintenant</strong></label>
+            <input id="newVipCode" class="vip-code-value" readonly value="{{ new_vip_code }}" onclick="this.select()" aria-describedby="vipShareHelp">
+            <p id="vipShareHelp">Le code complet n’est affiché qu’une fois. Envoie-le à ton ami : il crée un compte, confirme son e-mail, puis le saisit dans <strong>Mon compte → Activer un pass VIP</strong>.</p>
+            <a href="{{ url_for('admin_accounts') }}">J’ai copié le code</a>
+        </div>
+        {% endif %}
+    </section>
+
+    <section class="editorial-section" aria-labelledby="accountsTitle">
+        <h2 id="accountsTitle">Utilisateurs inscrits</h2>
+        <p>{{ total }} compte{% if total != 1 %}s{% endif %}{% if query %} correspondant à ta recherche{% endif %}. Les dates sont affichées en UTC. Les anciennes connexions ne sont pas reconstituées.</p>
+        <form class="admin-account-search" method="get" action="{{ url_for('admin_accounts') }}">
+            <label for="accountSearch">Rechercher une adresse e-mail</label>
+            <div><input id="accountSearch" name="q" type="search" maxlength="254" value="{{ query }}" placeholder="Adresse e-mail"><button class="button button-secondary" type="submit">Rechercher</button></div>
+        </form>
+        <div class="admin-table-scroll">
+            <table class="admin-usage-table"><thead><tr><th>E-mail</th><th>Confirmation</th><th>Accès</th><th>Inscription (UTC)</th><th>Dernière connexion (UTC)</th><th>Connexions</th></tr></thead><tbody>
+                {% for account in accounts %}<tr>
+                    <td>{{ account.email }}</td><td>{{ 'Confirmé' if account.email_verified else 'À confirmer' }}</td>
+                    <td>{% if account.vip_active %}VIP{% elif account.has_plus %}Plus{% else %}Gratuit{% endif %}</td>
+                    <td>{{ account.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                    <td>{{ account.last_login_at.strftime('%d/%m/%Y %H:%M') if account.last_login_at else 'Aucune enregistrée' }}</td><td>{{ account.login_count }}</td>
+                </tr>{% else %}<tr><td colspan="6">Aucun compte à afficher.</td></tr>{% endfor %}
+            </tbody></table>
+        </div>
+        <nav class="admin-pagination" aria-label="Pages des comptes">
+            {% if page > 1 %}<a href="{{ url_for('admin_accounts', page=page-1, q=query, vip_page=vip_page) }}">← Précédente</a>{% endif %}
+            <span>Page {{ page }} / {{ pages }}</span>
+            {% if page < pages %}<a href="{{ url_for('admin_accounts', page=page+1, q=query, vip_page=vip_page) }}">Suivante →</a>{% endif %}
+        </nav>
+    </section>
+
+    <section class="editorial-section" aria-labelledby="passesTitle">
+        <h2 id="passesTitle">Pass VIP créés</h2><p>{{ vip_total }} pass créé(s). La révocation retire uniquement l’accès offert par ce pass ; un abonnement payant actif continue de fonctionner.</p>
+        <div class="admin-table-scroll"><table class="admin-usage-table"><thead><tr><th>Nom</th><th>Créé le (UTC)</th><th>État</th><th>Compte bénéficiaire</th><th>Action</th></tr></thead><tbody>
+            {% for pass in passes %}<tr>
+                <td>{{ pass.label }}</td><td>{{ pass.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                <td>{% if pass.revoked_at %}Révoqué{% elif pass.redeemed_at %}Utilisé{% else %}À donner{% endif %}</td>
+                <td>{{ pass.email or ('Compte supprimé' if pass.redeemed_at else 'Pas encore utilisé') }}</td>
+                <td>{% if not pass.revoked_at %}<form method="post" action="{{ url_for('admin_revoke_vip', pass_id=pass.id) }}" onsubmit="return confirm('Révoquer ce pass et retirer l’accès VIP associé ?');"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="button button-secondary admin-delete-button" type="submit">Révoquer</button></form>{% else %}—{% endif %}</td>
+            </tr>{% else %}<tr><td colspan="5">Aucun pass créé.</td></tr>{% endfor %}
+        </tbody></table></div>
+        <nav class="admin-pagination" aria-label="Pages des pass VIP">
+            {% if vip_page > 1 %}<a href="{{ url_for('admin_accounts', page=page, q=query, vip_page=vip_page-1) }}">← Précédente</a>{% endif %}
+            <span>Page {{ vip_page }} / {{ vip_pages }}</span>
+            {% if vip_page < vip_pages %}<a href="{{ url_for('admin_accounts', page=page, q=query, vip_page=vip_page+1) }}">Suivante →</a>{% endif %}
+        </nav>
+    </section>
+</section>
+{% endblock %}

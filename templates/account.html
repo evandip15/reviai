@@ -7,13 +7,18 @@
     <p class="kicker editorial-kicker">ESPACE PERSONNEL</p>
     <h1>Mon compte</h1>
     {% if status == 'verified' %}<p class="admin-alert admin-alert-success" role="status">Ton adresse e-mail est confirmée.</p>{% endif %}
+    {% if status == 'vip_activated' %}<p class="admin-alert admin-alert-success" role="status">Ton pass VIP est activé ! Tous les outils sont accessibles sans limite quotidienne, gratuitement.</p>{% elif status == 'vip_already_active' %}<p class="admin-alert admin-alert-success" role="status">Ton accès VIP est déjà actif.</p>{% elif status == 'vip_invalid' %}<p class="admin-alert admin-alert-error" role="alert">Ce code VIP est incorrect, déjà utilisé ou révoqué. Vérifie-le auprès de la personne qui te l’a offert.</p>{% elif status == 'vip_error' %}<p class="admin-alert admin-alert-error" role="alert">Le pass n’a pas pu être activé. Réessaie plus tard.</p>{% endif %}
     {% if payment == 'success' %}<p class="admin-alert admin-alert-success" role="status">Paiement reçu. La mise à jour de ton abonnement peut prendre quelques secondes. Actualise cette page si Plus n’apparaît pas tout de suite.</p>{% elif payment == 'cancelled' %}<p class="admin-alert admin-alert-warning" role="status">Le paiement a été interrompu. Aucun abonnement n’a été démarré.</p>{% endif %}
     {% if status == 'cancel_scheduled' %}<p class="admin-alert admin-alert-success" role="status">Ta résiliation est programmée. Plus reste accessible jusqu’à la fin de la période déjà payée.</p>{% elif status == 'cancelled_now' %}<p class="admin-alert admin-alert-success" role="status">L’abonnement en attente a été annulé.</p>{% elif status == 'existing_subscription' %}<p class="admin-alert admin-alert-warning" role="status">Un abonnement ou paiement est déjà en cours. Gère-le ci-dessous avant d’en démarrer un autre.</p>{% elif status == 'consent_required' %}<p class="admin-alert admin-alert-warning" role="alert">Coche l’accord de renouvellement mensuel avant de continuer.</p>{% elif status in ['cancel_error', 'portal_error', 'delete_error'] %}<p class="admin-alert admin-alert-error" role="alert">Cette action n’a pas pu être effectuée pour le moment. Vérifie ton mot de passe et réessaie.</p>{% endif %}
     <div class="account-summary">
         <div><span>Adresse du compte</span><strong>{{ account.email }}</strong></div>
-        <div><span>Offre</span><strong>{% if has_plus %}RéviAI Plus{% else %}Gratuite{% endif %}</strong></div>
+        <div><span>Offre</span><strong>{% if account.vip_active %}VIP · accès offert{% elif has_plus %}RéviAI Plus{% else %}Gratuite{% endif %}</strong></div>
         {% if has_plus %}<div><span>Abonnement</span><strong>{% if account.cancel_at_period_end %}Résiliation programmée{% else %}Actif{% endif %}</strong></div>{% if account.subscription_period_end %}<div><span>{% if account.cancel_at_period_end %}Fin de l’accès Plus{% else %}Prochaine échéance{% endif %}</span><strong>{{ account.subscription_period_end.strftime('%d/%m/%Y') }}</strong></div>{% endif %}{% endif %}
     </div>
+    {% if account.vip_active %}
+    <p class="account-plan-note">Ton accès VIP est offert : fiches, exercices, quiz et chat sans limite quotidienne. Aucune carte bancaire ni aucun renouvellement payant ne sont nécessaires. Il reste actif jusqu’à sa révocation par l’éditeur.</p>
+    {% if account.stripe_subscription_id and account.subscription_status not in ['canceled', 'incomplete_expired'] %}<p class="admin-alert admin-alert-warning">L’activation du pass VIP ne résilie pas ton abonnement payant existant. Tu peux le résilier ci-dessous pour arrêter ses prochains prélèvements.</p>{% endif %}
+    {% endif %}
     {% if has_plus %}
         <p class="account-plan-note">Tu peux utiliser les fiches, les exercices, les quiz et le chat sans limite quotidienne.</p>
         {% if account.stripe_customer_id %}<form method="post" action="/compte/facturation"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="button button-secondary" type="submit">Gérer mes moyens de paiement et factures</button></form>{% endif %}
@@ -22,9 +27,19 @@
         {% if account.subscription_status == 'past_due' %}<p class="admin-alert admin-alert-warning">Le dernier paiement n’a pas abouti. Mets à jour ton moyen de paiement dans le portail Stripe pour rétablir Plus.</p>{% else %}<p class="admin-alert admin-alert-warning">Un paiement ou un changement d’abonnement est en attente.</p>{% endif %}
         {% if account.stripe_customer_id %}<form method="post" action="/compte/facturation"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="button button-primary" type="submit">Gérer mon paiement avec Stripe</button></form>{% endif %}
         {% if account.stripe_subscription_id and not account.cancel_at_period_end %}<form class="account-cancel-form" method="post" action="/compte/abonnement/resilier" onsubmit="return confirm('Arrêter cet abonnement ?');"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="button button-secondary" type="submit">{% if account.subscription_status == 'incomplete' %}Annuler le paiement en attente{% else %}Résilier mon abonnement{% endif %}</button></form>{% endif %}
-    {% else %}
+    {% elif not account.vip_active and not is_owner %}
         <p>La formule gratuite garde ses limites quotidiennes. Passe à Plus pour les retirer.</p>
         {% if billing_ready %}<form class="admin-login-form subscription-consent-form" method="post" action="/compte/abonnement"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><label class="account-consent"><input type="checkbox" name="accept_subscription" required> Je demande RéviAI Plus à 1,99 € par mois, avec renouvellement mensuel jusqu’à résiliation. Je peux résilier à tout moment ; l’accès reste actif jusqu’à la fin de la période payée.</label><button class="button button-primary" type="submit">Continuer vers le paiement sécurisé</button></form>{% else %}<p class="admin-alert admin-alert-warning">Le paiement sera bientôt disponible.</p>{% endif %}
+    {% endif %}
+    {% if not account.vip_active %}
+    <section class="vip-panel" aria-labelledby="activateVipTitle">
+        <h2 id="activateVipTitle">Activer un pass VIP</h2><p>Tu as reçu un code de l’éditeur ? Active ton accès gratuit et illimité ici. Chaque code ne peut être utilisé que par un seul compte.</p>
+        <form class="admin-login-form" method="post" action="{{ url_for('redeem_vip_pass') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <label for="vipCode">Ton code VIP</label><input id="vipCode" name="vip_code" autocomplete="off" spellcheck="false" maxlength="120" placeholder="VIP-…" required>
+            <button class="button button-primary" type="submit">Activer mon pass VIP</button>
+        </form>
+    </section>
     {% endif %}
     <form class="account-logout-form" method="post" action="/compte/deconnexion"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="button button-secondary" type="submit">Se déconnecter</button></form>
     <details class="account-delete-details"><summary>Supprimer mon compte</summary><p>Cette action supprime ton compte. Si un abonnement est en cours, il sera résilié immédiatement et l’accès Plus prendra fin tout de suite. Les factures déjà créées peuvent rester conservées par Stripe.</p><form class="admin-login-form" method="post" action="/compte/supprimer" onsubmit="return confirm('Supprimer définitivement le compte et résilier immédiatement tout abonnement associé ?');"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><label for="deleteAccountPassword">Confirme avec ton mot de passe</label><input id="deleteAccountPassword" name="password" type="password" autocomplete="current-password" required><button class="button button-secondary account-danger" type="submit">Supprimer mon compte et mes données RéviAI</button></form></details>

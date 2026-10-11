@@ -84,6 +84,7 @@ FEEDBACK_DATABASE_REQUIRED = os.getenv("FEEDBACK_DATABASE_REQUIRED", "false").lo
 FEEDBACK_TABLE = "reviai_exercise_feedback"
 USAGE_TABLE = "reviai_daily_usage"
 ACCOUNT_TABLE = "reviai_accounts"
+VIP_TABLE = "reviai_vip_passes"
 STRIPE_EVENTS_TABLE = "reviai_stripe_events"
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "").strip()
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()
@@ -92,7 +93,7 @@ MAIL_FROM = os.getenv("MAIL_FROM", "").strip()
 APPS_SCRIPT_MAIL_URL = os.getenv("APPS_SCRIPT_MAIL_URL", "").strip()
 APPS_SCRIPT_MAIL_TOKEN = os.getenv("APPS_SCRIPT_MAIL_TOKEN", "").strip()
 PLUS_PRICE_CENTS = 199
-TERMS_VERSION = "2026-10-09"
+TERMS_VERSION = "2026-10-11"
 USAGE_LOCK = Lock()
 LOCAL_DAILY_USAGE = {}
 LAST_USAGE_CLEANUP = ""
@@ -136,6 +137,10 @@ def billing_ready():
     )
 
 
+def accounts_ready():
+    return billing_database_ready() and mail_is_configured()
+
+
 def ensure_billing_tables(connection):
     global LAST_BILLING_CLEANUP
     connection.execute(
@@ -164,6 +169,20 @@ def ensure_billing_tables(connection):
     connection.execute(f"ALTER TABLE {ACCOUNT_TABLE} ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP")
     connection.execute(f"ALTER TABLE {ACCOUNT_TABLE} ADD COLUMN IF NOT EXISTS terms_version TEXT NOT NULL DEFAULT 'initial'")
     connection.execute(f"ALTER TABLE {ACCOUNT_TABLE} ADD COLUMN IF NOT EXISTS subscription_consent_at TIMESTAMPTZ")
+    connection.execute(f"ALTER TABLE {ACCOUNT_TABLE} ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ")
+    connection.execute(f"ALTER TABLE {ACCOUNT_TABLE} ADD COLUMN IF NOT EXISTS login_count INTEGER NOT NULL DEFAULT 0")
+    connection.execute(
+        f"""CREATE TABLE IF NOT EXISTS {VIP_TABLE} (
+            id TEXT PRIMARY KEY,
+            code_hash TEXT NOT NULL UNIQUE,
+            label TEXT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            redeemed_by TEXT REFERENCES {ACCOUNT_TABLE}(id) ON DELETE SET NULL,
+            redeemed_at TIMESTAMPTZ,
+            revoked_at TIMESTAMPTZ
+        )"""
+    )
+    connection.execute(f"CREATE INDEX IF NOT EXISTS reviai_vip_recipient_idx ON {VIP_TABLE} (redeemed_by)")
     connection.execute(
         f"""
         CREATE TABLE IF NOT EXISTS {STRIPE_EVENTS_TABLE} (
@@ -190,7 +209,10 @@ def billing_account(user_id):
             row = connection.execute(
                 f"""SELECT id, email, email_verified, stripe_customer_id,
                            stripe_subscription_id, subscription_status,
-                           subscription_period_end, cancel_at_period_end
+                           subscription_period_end, cancel_at_period_end,
+                           EXISTS (SELECT 1 FROM {VIP_TABLE} v
+                                   WHERE v.redeemed_by = {ACCOUNT_TABLE}.id
+                                     AND v.redeemed_at IS NOT NULL AND v.revoked_at IS NULL)
                     FROM {ACCOUNT_TABLE} WHERE id = %s""",
                 (str(user_id),),
             ).fetchone()
@@ -201,6 +223,7 @@ def billing_account(user_id):
             "stripe_customer_id": row[3], "stripe_subscription_id": row[4],
             "subscription_status": row[5], "subscription_period_end": row[6],
             "cancel_at_period_end": row[7],
+            "vip_active": row[8],
         }
     except Exception:
         app.logger.exception("Impossible de lire le compte RéviAI.")
@@ -220,8 +243,33 @@ def has_unlimited_access():
     if getattr(g, "reviai_unlimited_access", None) is not None:
         return g.reviai_unlimited_access
     account = billing_account(session.get("user_id"))
-    g.reviai_unlimited_access = bool(account and account.get("email_verified") and account_has_plus(account))
+    g.reviai_unlimited_access = account_has_unlimited_access(account)
     return g.reviai_unlimited_access
+
+
+def account_has_unlimited_access(account):
+    return bool(account and account.get("email_verified") and (
+        account.get("vip_active") or account_has_plus(account)
+    ))
+
+
+def record_account_login(user_id):
+    try:
+        with feedback_database_connection() as connection:
+            ensure_billing_tables(connection)
+            connection.execute(
+                f"UPDATE {ACCOUNT_TABLE} SET last_login_at = CURRENT_TIMESTAMP, login_count = login_count + 1 WHERE id = %s",
+                (str(user_id),),
+            )
+    except Exception:
+        app.logger.exception("Enregistrement de la dernière connexion impossible.")
+
+
+def vip_code_hash(code):
+    normalized = re.sub(r"[\s-]", "", str(code)).upper()
+    if not re.fullmatch(r"VIP[A-F0-9]{24}", normalized):
+        return None
+    return hashlib.sha256(normalized.encode("ascii")).hexdigest()
 
 
 def mail_is_configured():
@@ -1349,7 +1397,7 @@ def home():
     # La page d'accueil sert à importer, générer des fiches et résoudre des
     # exercices ; les emplacements publicitaires sont réservés aux guides.
     account = billing_account(session.get("user_id"))
-    return render_template("index.html", user_has_plus=account_has_plus(account))
+    return render_template("index.html", user_has_plus=account_has_plus(account), user_has_vip=bool(account and account.get("vip_active")))
 
 
 @app.route("/ads.txt")
@@ -1466,6 +1514,7 @@ def inject_account_navigation():
     return {
         "account_signed_in": bool(session.get("user_id")),
         "admin_signed_in": bool(session.get("admin_authenticated")),
+        "accounts_ready": accounts_ready(),
     }
 
 
@@ -1475,6 +1524,7 @@ def plus_page():
     return render_template(
         "plus.html", billing_ready=billing_ready(),
         user_has_plus=account_has_plus(account),
+        user_has_vip=bool(account and account.get("vip_active")),
     )
 
 
@@ -1487,8 +1537,8 @@ def register_account():
     if request.method == "POST":
         if not valid_account_csrf(request.form.get("csrf_token", "")):
             error = "La session a expiré. Recharge la page et réessaie."
-        elif not billing_ready():
-            error = "Les abonnements ne sont pas encore configurés par l’éditeur. Réessaie plus tard."
+        elif not accounts_ready():
+            error = "La création de comptes n’est pas encore configurée par l’éditeur. Réessaie plus tard."
         else:
             email = str(request.form.get("email", "")).strip().lower()
             password = request.form.get("password", "")
@@ -1548,6 +1598,7 @@ def login_account():
                 if not account["email_verified"]:
                     error = "Confirme ton adresse e-mail avant de te connecter. Tu peux demander un nouveau lien ci-dessous."
                 else:
+                    record_account_login(account["id"])
                     session.clear()
                     session["user_id"] = account["id"]
                     session["account_csrf_token"] = secrets.token_urlsafe(32)
@@ -1574,7 +1625,9 @@ def verify_account():
                 f"""UPDATE {ACCOUNT_TABLE}
                     SET email_verified = TRUE,
                         verification_token_hash = NULL,
-                        verification_expires_at = NULL
+                        verification_expires_at = NULL,
+                        last_login_at = CURRENT_TIMESTAMP,
+                        login_count = login_count + 1
                     WHERE verification_token_hash = %s
                       AND verification_expires_at > CURRENT_TIMESTAMP
                     RETURNING id""",
@@ -1697,6 +1750,47 @@ def account_page():
     )
 
 
+@app.route("/compte/vip", methods=["POST"])
+def redeem_vip_pass():
+    if not session.get("user_id"):
+        return redirect(url_for("login_account"))
+    if not valid_account_csrf(request.form.get("csrf_token", "")):
+        return "Session expirée. Recharge la page puis réessaie.", 400
+    account = billing_account(session["user_id"])
+    if not account or not account["email_verified"]:
+        return redirect(url_for("login_account"))
+    if account.get("vip_active"):
+        return redirect(url_for("account_page", status="vip_already_active"))
+    code_hash = vip_code_hash(request.form.get("vip_code", "")[:120])
+    if not code_hash:
+        return redirect(url_for("account_page", status="vip_invalid"))
+    try:
+        with feedback_database_connection() as connection:
+            ensure_billing_tables(connection)
+            connection.execute(
+                f"SELECT id FROM {ACCOUNT_TABLE} WHERE id = %s FOR UPDATE",
+                (str(account["id"]),),
+            )
+            active_pass = connection.execute(
+                f"SELECT id FROM {VIP_TABLE} WHERE redeemed_by = %s AND redeemed_at IS NOT NULL AND revoked_at IS NULL LIMIT 1",
+                (str(account["id"]),),
+            ).fetchone()
+            if active_pass:
+                return redirect(url_for("account_page", status="vip_already_active"))
+            # La prise du pass est atomique : deux comptes ne peuvent pas l'utiliser.
+            claimed = connection.execute(
+                f"""UPDATE {VIP_TABLE} SET redeemed_by = %s, redeemed_at = CURRENT_TIMESTAMP
+                    WHERE code_hash = %s AND redeemed_at IS NULL AND revoked_at IS NULL
+                    RETURNING id""",
+                (str(account["id"]), code_hash),
+            ).fetchone()
+        status = "vip_activated" if claimed else "vip_invalid"
+    except Exception:
+        app.logger.exception("Activation du pass VIP impossible.")
+        status = "vip_error"
+    return redirect(url_for("account_page", status=status))
+
+
 @app.route("/compte/abonnement", methods=["POST"])
 def start_subscription():
     if not session.get("user_id"):
@@ -1708,7 +1802,7 @@ def start_subscription():
     account = billing_account(session.get("user_id"))
     if not account or not account["email_verified"]:
         return redirect(url_for("login_account"))
-    if account_has_plus(account):
+    if account_has_unlimited_access(account):
         return redirect(url_for("account_page"))
     if account.get("stripe_subscription_id") and account.get("subscription_status") not in {"canceled", "incomplete_expired"}:
         return redirect(url_for("account_page", status="existing_subscription"))
@@ -1936,6 +2030,121 @@ def admin_analytics():
     )
 
 
+def render_admin_accounts(new_vip_code="", error=""):
+    query = str(request.args.get("q", "")).strip()[:254]
+    try:
+        page = max(1, min(int(request.args.get("page", "1")), 100000))
+    except ValueError:
+        page = 1
+    try:
+        vip_page = max(1, min(int(request.args.get("vip_page", "1")), 100000))
+    except ValueError:
+        vip_page = 1
+    accounts, passes, total, vip_total = [], [], 0, 0
+    if not billing_database_ready():
+        error = "Configure la base de données pour gérer les comptes et les pass VIP."
+    else:
+        try:
+            with feedback_database_connection() as connection:
+                ensure_billing_tables(connection)
+                params = (f"%{query}%",)
+                total = connection.execute(
+                    f"SELECT COUNT(*) FROM {ACCOUNT_TABLE} WHERE email ILIKE %s", params,
+                ).fetchone()[0]
+                page = min(page, max(1, (total + 49) // 50))
+                rows = connection.execute(
+                    f"""SELECT a.id, a.email, a.email_verified, a.created_at, a.last_login_at,
+                               a.login_count, a.subscription_status, a.subscription_period_end,
+                               EXISTS (SELECT 1 FROM {VIP_TABLE} v WHERE v.redeemed_by = a.id
+                                       AND v.redeemed_at IS NOT NULL AND v.revoked_at IS NULL)
+                        FROM {ACCOUNT_TABLE} a WHERE a.email ILIKE %s
+                        ORDER BY a.last_login_at DESC NULLS LAST, a.created_at DESC, a.id
+                        LIMIT 50 OFFSET %s""", params + ((page - 1) * 50,),
+                ).fetchall()
+                for row in rows:
+                    account = dict(zip(("id", "email", "email_verified", "created_at", "last_login_at",
+                                        "login_count", "subscription_status", "subscription_period_end", "vip_active"), row))
+                    for field in ("created_at", "last_login_at"):
+                        if account[field] is not None:
+                            account[field] = account[field].astimezone(timezone.utc)
+                    account["has_plus"] = account_has_plus(account)
+                    accounts.append(account)
+                vip_total = connection.execute(f"SELECT COUNT(*) FROM {VIP_TABLE}").fetchone()[0]
+                vip_page = min(vip_page, max(1, (vip_total + 49) // 50))
+                rows = connection.execute(
+                    f"""SELECT v.id, v.label, v.created_at, v.redeemed_at, v.revoked_at, a.email
+                        FROM {VIP_TABLE} v LEFT JOIN {ACCOUNT_TABLE} a ON a.id = v.redeemed_by
+                        ORDER BY v.created_at DESC, v.id LIMIT 50 OFFSET %s""", ((vip_page - 1) * 50,),
+                ).fetchall()
+                passes = [dict(zip(("id", "label", "created_at", "redeemed_at", "revoked_at", "email"), row)) for row in rows]
+                for vip_pass in passes:
+                    vip_pass["created_at"] = vip_pass["created_at"].astimezone(timezone.utc)
+        except Exception:
+            app.logger.exception("Lecture des comptes et des pass VIP impossible.")
+            error = "Impossible de charger les comptes. Vérifie la connexion à la base de données."
+    return render_template(
+        "admin_accounts.html", accounts=accounts, passes=passes, total=total,
+        page=page, pages=max(1, (total + 49) // 50), query=query,
+        vip_page=vip_page, vip_pages=max(1, (vip_total + 49) // 50), vip_total=vip_total,
+        new_vip_code=new_vip_code, storage_error=error,
+        csrf_token=admin_csrf_token(), status=request.args.get("status", ""),
+        database_ready=billing_database_ready(),
+    )
+
+
+@app.route("/admin/comptes")
+def admin_accounts():
+    if not ADMIN_PASSWORD:
+        return render_template("admin_login.html", configured=False), 503
+    if not session.get("admin_authenticated"):
+        return redirect(url_for("admin_login"))
+    return render_admin_accounts()
+
+
+@app.route("/admin/vip/creer", methods=["POST"])
+def admin_create_vip():
+    if not ADMIN_PASSWORD or not session.get("admin_authenticated"):
+        return redirect(url_for("admin_login"))
+    if not valid_admin_csrf(request.form.get("csrf_token", "")):
+        return "Session expirée. Recharge la page puis réessaie.", 400
+    label = str(request.form.get("label", "")).strip()[:80]
+    if not label:
+        return render_admin_accounts(error="Donne un nom à ce pass pour le retrouver.")
+    raw = secrets.token_hex(12).upper()
+    code = "VIP-" + "-".join(raw[i:i + 6] for i in range(0, len(raw), 6))
+    try:
+        with feedback_database_connection() as connection:
+            ensure_billing_tables(connection)
+            connection.execute(
+                f"INSERT INTO {VIP_TABLE} (id, code_hash, label) VALUES (%s, %s, %s)",
+                (secrets.token_urlsafe(18), vip_code_hash(code), label),
+            )
+    except Exception:
+        app.logger.exception("Création du pass VIP impossible.")
+        return render_admin_accounts(error="Le pass n’a pas pu être créé. Réessaie plus tard.")
+    # Le code complet n'est affiché qu'ici ; seul son hash est conservé.
+    return render_admin_accounts(new_vip_code=code)
+
+
+@app.route("/admin/vip/<pass_id>/revoquer", methods=["POST"])
+def admin_revoke_vip(pass_id):
+    if not ADMIN_PASSWORD or not session.get("admin_authenticated"):
+        return redirect(url_for("admin_login"))
+    if not valid_admin_csrf(request.form.get("csrf_token", "")):
+        return "Session expirée. Recharge la page puis réessaie.", 400
+    try:
+        with feedback_database_connection() as connection:
+            ensure_billing_tables(connection)
+            connection.execute(
+                f"UPDATE {VIP_TABLE} SET revoked_at = CURRENT_TIMESTAMP WHERE id = %s AND revoked_at IS NULL",
+                (str(pass_id),),
+            )
+    except Exception:
+        app.logger.exception("Révocation du pass VIP impossible.")
+        return render_admin_accounts(error="Le pass n’a pas pu être révoqué.")
+    return redirect(url_for("admin_accounts", status="vip_revoked"))
+
+
 @app.route("/admin/signalements/<report_id>/supprimer", methods=["POST"])
 def admin_delete_feedback(report_id):
     if not ADMIN_PASSWORD:
@@ -1969,7 +2178,10 @@ def health():
 @app.route("/api/usage")
 def usage():
     unlimited = has_unlimited_access()
-    plan = "éditeur" if session.get("admin_authenticated") else ("plus" if unlimited else "gratuit")
+    account = billing_account(session.get("user_id"))
+    plan = "éditeur" if session.get("admin_authenticated") else (
+        "VIP" if unlimited and account and account.get("vip_active") else ("plus" if unlimited else "gratuit")
+    )
     return jsonify({"limits": daily_usage_snapshot(), "unlimited": unlimited, "plan": plan})
 
 

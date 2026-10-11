@@ -151,9 +151,24 @@ function renderInlineMath(expression) {
         "\\in": "∈",
         "\\pi": "π",
         "\\Delta": "Δ",
+        "\\alpha": "α",
+        "\\beta": "β",
+        "\\gamma": "γ",
+        "\\theta": "θ",
+        "\\lambda": "λ",
+        "\\mu": "μ",
+        "\\sigma": "σ",
+        "\\omega": "ω",
+        "\\div": "÷",
+        "\\le": "≤",
+        "\\ge": "≥",
     };
 
     let result = expression
+        .replace(/\$/g, "")
+        .replace(/\\[()[\]]/g, "")
+        .replace(/\/{1,2}(?=(?:times|cdot|div|frac|sqrt|approx|leq|geq|neq|pi)\b)/g, "\\")
+        .replace(/\\{2,}(?=[A-Za-z])/g, "\\")
         .replace(/\\text\{([^{}]*)\}/g, "$1")
         .replace(/\\(?:vec|overrightarrow)\s*\{([A-Za-z]{1,8})\}/g, '<span class="vector-notation">$1</span>')
         .replace(/\\vec([A-Za-z]{1,3})/g, '<span class="vector-notation">$1</span>')
@@ -172,9 +187,9 @@ function renderInlineMath(expression) {
         .replace(/\\left|\\right/g, "")
         .replace(/\\quad|\\qquad|\\,|\\;/g, " ")
         .replace(/_\{([^{}]+)\}/g, '<sub>$1</sub>')
-        .replace(/_(\w+)/g, '<sub>$1</sub>')
+        .replace(/_([+-]?\d+|[A-Za-z])/g, '<sub>$1</sub>')
         .replace(/\^\{([^{}]+)\}/g, '<sup>$1</sup>')
-        .replace(/\^(\w+|[+-])/g, '<sup>$1</sup>')
+        .replace(/\^([+-]?\d+(?:[.,]\d+)?|[A-Za-z])/g, '<sup>$1</sup>')
         .replace(/\\([A-Za-z]+)/g, "$1");
 }
 
@@ -441,7 +456,9 @@ async function refreshUsageSummary() {
         if (result.unlimited) {
             usageSummary.textContent = result.plan === "éditeur"
                 ? "Accès éditeur : tous les outils sont disponibles sans limite quotidienne."
-                : "RéviAI Plus est actif : tous les outils sont disponibles sans limite quotidienne.";
+                : result.plan === "VIP"
+                    ? "Pass VIP actif : tous les outils sont disponibles sans limite quotidienne, gratuitement."
+                    : "RéviAI Plus est actif : tous les outils sont disponibles sans limite quotidienne.";
             return;
         }
         const limits = result.limits || {};
@@ -917,8 +934,7 @@ function renderQuizQuestion() {
     quizScore.textContent =
         `Score : ${quizScoreValue}`;
 
-    quizQuestion.textContent =
-        item.question || "";
+    quizQuestion.innerHTML = inlineMarkdown(item.question || "");
 
     quizAnswers.innerHTML = "";
 
@@ -938,7 +954,7 @@ function renderQuizQuestion() {
 
         button.type = "button";
         button.className = "quiz-answer";
-        button.textContent = answer;
+        button.innerHTML = inlineMarkdown(answer);
 
         button.addEventListener("click", () => {
             answerQuiz(index);
@@ -977,8 +993,8 @@ function answerQuiz(index) {
             buttons[index].classList.add("correct");
         }
 
-        quizFeedback.textContent =
-            `✅ Bonne réponse ! ${item.explanation || ""}`;
+        quizFeedback.innerHTML = inlineMarkdown(
+            `✅ Bonne réponse ! ${item.explanation || ""}`);
 
     } else {
         if (buttons[index]) {
@@ -992,8 +1008,8 @@ function answerQuiz(index) {
             buttons[item.correct].classList.add("correct");
         }
 
-        quizFeedback.textContent =
-            `❌ Mauvaise réponse. ${item.explanation || ""}`;
+        quizFeedback.innerHTML = inlineMarkdown(
+            `❌ Mauvaise réponse. ${item.explanation || ""}`);
     }
 
     quizFeedback.classList.remove("hidden");

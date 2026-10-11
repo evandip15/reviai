@@ -694,6 +694,8 @@ RÈGLES :
 - Pas de markdown autour du JSON.
 - "correct" est un entier 0, 1, 2 ou 3.
 - "explanation" explique brièvement la bonne réponse à partir du cours.
+- Dans les questions, les réponses et les explications, écris les formules directement lisibles : x², 10⁻³, H₂O, 3 × 4, √(x), (a+b)/(c+d), π, ≤ et ≥.
+- N'utilise jamais de délimiteurs $ ni de commandes LaTeX (par exemple \\times, \\frac ou \\vec). Pour un vecteur, écris « vecteur AB ».
 - Variation : {seed}
 
 QUESTIONS DÉJÀ UTILISÉES À ÉVITER :

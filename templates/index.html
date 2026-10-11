@@ -43,10 +43,19 @@
 
         {% if admin_signed_in %}
         <a class="plus-banner" href="/admin/signalements"><span><strong>Accès éditeur illimité</strong><small>Tous les outils sont disponibles sans limite quotidienne.</small></span><span class="plus-banner-price">Espace éditeur <b>Ouvrir →</b></span></a>
+        {% elif user_has_vip %}
+        <a class="plus-banner" href="/compte"><span><strong>Ton pass VIP est actif</strong><small>Tous les outils sont disponibles sans limite quotidienne, gratuitement.</small></span><span class="plus-banner-price">Mon compte <b>Ouvrir →</b></span></a>
         {% elif user_has_plus %}
         <a class="plus-banner" href="/compte"><span><strong>RéviAI Plus est actif</strong><small>Tous les outils sont disponibles sans limite quotidienne.</small></span><span class="plus-banner-price">Mon compte <b>Gérer →</b></span></a>
         {% else %}
         <a class="plus-banner" href="/plus"><span><strong>RéviAI Plus</strong><small>Fiches, exercices, quiz et chat sans limite quotidienne.</small></span><span class="plus-banner-price">1,99 € / mois <b>Découvrir →</b></span></a>
+        {% endif %}
+
+        {% if not account_signed_in and not admin_signed_in %}
+        <section class="signup-prompt card" aria-labelledby="signupPromptTitle">
+            <div><span class="kicker">TON COMPTE GRATUIT</span><h2 id="signupPromptTitle">Crée ton compte avec ton e-mail</h2><p>Tu as un pass VIP offert ? Active-le depuis ton compte. Tu pourras aussi y gérer un abonnement Plus.</p><small>Tu peux continuer à utiliser les outils gratuits sans compte.</small></div>
+            <div class="section-actions"><a class="button button-primary" href="/inscription">Créer mon compte gratuit</a><a class="button button-secondary" href="/connexion">J’ai déjà un compte</a></div>
+        </section>
         {% endif %}
 
         <section id="libraryPanel" class="card library-panel hidden" aria-labelledby="libraryTitle">
@@ -264,7 +273,7 @@
             <div class="quiz-box">
                 <div id="quizQuestion" class="quiz-question"></div>
                 <div id="quizAnswers" class="answers"></div>
-                <div id="quizFeedback" class="feedback hidden"></div>
+                <div id="quizFeedback" class="feedback quiz-feedback hidden"></div>
             </div>
             <div class="quiz-footer">
                 <span id="quizScore" class="score">Score : 0</span>

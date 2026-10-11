@@ -11,6 +11,7 @@
         <div><span class="plus-price">1,99 €</span><span class="plus-period"> / mois</span></div>
         <p>Abonnement mensuel, renouvelé chaque mois. Résiliation possible à tout moment depuis ton compte.</p>
         {% if admin_signed_in %}<a class="button button-primary" href="/admin/signalements">Accès éditeur illimité</a>
+        {% elif user_has_vip %}<p>Ton pass VIP te donne déjà accès à tous les outils, gratuitement.</p><a class="button button-primary" href="/compte">Mon accès VIP</a>
         {% elif user_has_plus %}<a class="button button-primary" href="/compte">Gérer mon compte Plus</a>
         {% elif billing_ready %}
             {% if account_signed_in %}<a class="button button-primary" href="/compte">Voir mon compte et m’abonner</a>{% else %}<a class="button button-primary" href="/inscription">Créer mon compte</a><a class="plus-login-link" href="/connexion">J’ai déjà un compte</a>{% endif %}

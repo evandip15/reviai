@@ -12,6 +12,9 @@
 - Offre RéviAI Plus à 1,99 €/mois, renouvellement mensuel et résiliation depuis le compte ; l’accès reste ouvert jusqu’à la fin de la période réglée.
 - Accès éditeur sans limites quotidiennes via la connexion `/admin`.
 - Statistiques quotidiennes agrégées et accessibles dans l’espace éditeur.
+- Comptes gratuits, liste privée des inscrits et dernière connexion dans `/admin/comptes`.
+- Pass VIP individuels offerts, à usage unique et révocables, donnant un accès sans limite quotidienne.
+- Formules lisibles dans les questions, réponses et corrections des quiz, comme dans les fiches.
 - Interface responsive.
 - Déploiement conteneurisé avec Docker/Render.
 - Guides pédagogiques publics, FAQ et pages À propos et confidentialité.
@@ -27,9 +30,20 @@ python app.py
 
 Ouvre ensuite `http://127.0.0.1:5000`.
 
+## Comptes gratuits et pass VIP
+
+La page d’accueil propose de créer un compte gratuit avec une adresse e-mail confirmée. Les outils gratuits restent utilisables sans inscription. Les nouvelles colonnes de connexion et la table des pass VIP sont créées automatiquement dans la base PostgreSQL existante : aucune variable d’environnement supplémentaire n’est nécessaire.
+
+1. Connecte-toi à `/admin`, puis ouvre **Comptes et pass VIP** (ou `/admin/comptes`).
+2. Donne un nom au pass et clique sur **Créer un pass VIP**. Copie immédiatement le code affiché : seul son hash est conservé, il ne pourra pas être réaffiché.
+3. Ton ami crée un compte, confirme son e-mail, puis saisit le code dans **Mon compte → Activer un pass VIP**.
+4. Le pass donne un accès gratuit sans limite quotidienne, sans date de fin. Chaque code ne peut être activé qu’une fois. Tu peux le révoquer depuis cette même page éditeur ; un code utilisé reste inutilisable même si le compte bénéficiaire est supprimé.
+
+La liste privée affiche l’e-mail, la confirmation, l’offre, l’inscription, la dernière connexion réussie et le nombre de connexions enregistrées. La confirmation d’adresse ouvre une session et compte comme une connexion. Les dates sont affichées en UTC ; les connexions antérieures à cette version ne sont pas reconstituées. Les comptes et les pass sont paginés. La politique de confidentialité décrit ces données. L’activation d’un pass VIP ne résilie pas un abonnement payant existant ; le bénéficiaire peut le résilier depuis son compte.
+
 ## RéviAI Plus, paiement et comptes
 
-Le parcours Plus utilise Stripe Checkout et son portail de facturation. Le prix récurrent est créé par le serveur à 1,99 € par mois. La création de comptes et le paiement restent désactivés tant que PostgreSQL, Stripe et un service d’envoi d’e-mails ne sont pas configurés.
+Le parcours Plus utilise Stripe Checkout et son portail de facturation. Le prix récurrent est créé par le serveur à 1,99 € par mois. Les comptes gratuits nécessitent PostgreSQL et un service d’envoi d’e-mails ; Stripe est nécessaire uniquement pour les abonnements payants.
 
 Dans Render, ajoute ces variables secrètes :
 
