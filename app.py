@@ -127,11 +127,14 @@ def billing_database_ready():
     return bool(DATABASE_URL and psycopg is not None)
 
 
+def billing_management_ready():
+    # Résilier ne dépend ni de l'envoi d'e-mails ni du secret des notifications.
+    return bool(billing_database_ready() and stripe is not None and STRIPE_SECRET_KEY)
+
+
 def billing_ready():
     return bool(
-        billing_database_ready()
-        and stripe is not None
-        and STRIPE_SECRET_KEY
+        billing_management_ready()
         and STRIPE_WEBHOOK_SECRET
         and mail_is_configured()
     )
@@ -364,7 +367,8 @@ def account_csrf_token():
 
 def valid_account_csrf(token):
     expected = session.get("account_csrf_token", "")
-    return bool(expected and token and hmac.compare_digest(expected, token))
+    return bool(isinstance(expected, str) and isinstance(token, str) and expected and token
+                and hmac.compare_digest(expected.encode("utf-8"), token.encode("utf-8")))
 
 
 def send_verification_email(user_id, email):
@@ -406,10 +410,14 @@ def stripe_configure():
 
 
 def stripe_field(value, name, default=None):
-    if isinstance(value, dict):
-        return value.get(name, default)
-    getter = getattr(value, "get", None)
-    return getter(name, default) if getter else default
+    # Les objets du SDK Stripe récent exposent [] mais pas dict.get().
+    # Lire par clé évite aussi la collision entre le champ "items" et une méthode.
+    if hasattr(value, "__getitem__"):
+        try:
+            return value[name]
+        except (KeyError, IndexError, TypeError):
+            return default
+    return getattr(value, name, default)
 
 
 def stripe_id(value):
@@ -853,7 +861,8 @@ def admin_csrf_token():
 
 def valid_admin_csrf(token):
     expected = session.get("admin_csrf_token", "")
-    return bool(expected and token and hmac.compare_digest(expected, token))
+    return bool(isinstance(expected, str) and isinstance(token, str) and expected and token
+                and hmac.compare_digest(expected.encode("utf-8"), token.encode("utf-8")))
 
 
 def cleanup_temp(paths):
@@ -1853,22 +1862,37 @@ def cancel_subscription():
     if not valid_account_csrf(request.form.get("csrf_token", "")):
         return "Session expirée. Recharge la page puis réessaie.", 400
     account = billing_account(session.get("user_id"))
-    if not account or not account.get("stripe_subscription_id") or not billing_ready():
+    if not account or not account.get("stripe_subscription_id") or not billing_management_ready():
         return redirect(url_for("account_page", status="cancel_error"))
     try:
         stripe_configure()
-        if account.get("subscription_status") in {"incomplete", "unpaid", "paused"}:
-            updated = stripe.Subscription.cancel(account["stripe_subscription_id"])
+        subscription_id = account["stripe_subscription_id"]
+        subscription = stripe.Subscription.retrieve(subscription_id)
+        subscription_status = stripe_field(subscription, "status")
+        if subscription_status in {"canceled", "incomplete_expired"}:
+            updated = subscription
+        elif subscription_status in {"incomplete", "unpaid", "paused"}:
+            updated = stripe.Subscription.cancel(subscription_id)
+        elif stripe_field(subscription, "cancel_at_period_end", False):
+            updated = subscription
         else:
             updated = stripe.Subscription.modify(
-                account["stripe_subscription_id"], cancel_at_period_end=True,
+                subscription_id, cancel_at_period_end=True,
             )
-        apply_subscription_update(updated)
-        result_status = "cancelled_now" if stripe_field(updated, "status") == "canceled" else "cancel_scheduled"
-        return redirect(url_for("account_page", status=result_status))
+        ended = stripe_field(updated, "status") in {"canceled", "incomplete_expired"}
+        if not ended and not stripe_field(updated, "cancel_at_period_end", False):
+            raise RuntimeError("Stripe n'a pas confirmé la résiliation.")
     except Exception:
-        app.logger.exception("Résiliation à échéance impossible.")
+        app.logger.exception("Résiliation impossible.")
         return redirect(url_for("account_page", status="cancel_error"))
+    try:
+        if not apply_subscription_update(updated):
+            raise RuntimeError("Compte de l'abonnement introuvable.")
+    except Exception:
+        # Stripe a déjà confirmé : une panne locale ne doit pas annoncer un échec.
+        app.logger.exception("Résiliation confirmée par Stripe, synchronisation locale en attente.")
+        return redirect(url_for("account_page", status="cancel_sync_pending"))
+    return redirect(url_for("account_page", status="cancelled_now" if ended else "cancel_scheduled"))
 
 
 @app.route("/compte/facturation", methods=["POST"])
@@ -1878,7 +1902,7 @@ def billing_portal():
     if not valid_account_csrf(request.form.get("csrf_token", "")):
         return "Session expirée. Recharge la page puis réessaie.", 400
     account = billing_account(session.get("user_id"))
-    if not account or not account.get("stripe_customer_id") or not billing_ready():
+    if not account or not account.get("stripe_customer_id") or not billing_management_ready():
         return redirect(url_for("account_page", status="portal_error"))
     try:
         stripe_configure()
@@ -1920,7 +1944,7 @@ def delete_account():
         subscription_id = row[1]
         subscription_status = row[2]
         if subscription_id and subscription_status not in {"canceled", "incomplete_expired"}:
-            if not billing_ready():
+            if not billing_management_ready():
                 return redirect(url_for("account_page", status="delete_error"))
             stripe_configure()
             stripe.Subscription.cancel(subscription_id)
@@ -1971,7 +1995,7 @@ def admin_login():
         if not valid_admin_csrf(request.form.get("csrf_token", "")):
             error = "La session a expiré. Recharge la page puis réessaie."
             status_code = 400
-        elif hmac.compare_digest(request.form.get("password", ""), ADMIN_PASSWORD):
+        elif hmac.compare_digest(request.form.get("password", "").encode("utf-8"), ADMIN_PASSWORD.encode("utf-8")):
             session.clear()
             session["admin_authenticated"] = True
             session["admin_csrf_token"] = secrets.token_urlsafe(32)
@@ -2412,7 +2436,9 @@ def solve_exercise():
 
 @app.route("/api/exercise-chat", methods=["POST"])
 def exercise_chat():
-    payload = request.get_json(silent=True) or {}
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Envoie un objet JSON valide."}), 400
     session_key = str(payload.get("session_id", "")).strip()
     message = str(payload.get("message", "")).strip()
 
@@ -2466,7 +2492,9 @@ def exercise_chat():
 
 @app.route("/api/exercise-feedback", methods=["POST"])
 def exercise_feedback():
-    payload = request.get_json(silent=True) or {}
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Envoie un objet JSON valide."}), 400
     session_key = str(payload.get("session_id", "")).strip()
     category = str(payload.get("category", "")).strip()
     comment = str(payload.get("comment", "")).strip()
@@ -2518,7 +2546,9 @@ def exercise_feedback():
 
 @app.route("/api/quiz", methods=["POST"])
 def quiz():
-    payload = request.get_json(silent=True) or {}
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Envoie un objet JSON valide."}), 400
     session_key = str(payload.get("session_id", "")).strip()
 
     with STATE_LOCK:
